@@ -1,0 +1,49 @@
+{
+  "name": "waops",
+  "private": true,
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' run build && pnpm -r --filter './apps/*' run build",
+    "build:packages": "pnpm -r --filter './packages/*' run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "test:unit": "pnpm -r run test:unit",
+    "test:e2e": "pnpm --filter @waops/api run test:e2e",
+    "test:contract": "pnpm --filter @waops/contracts run test",
+    "dev:infra": "docker compose --profile core up -d",
+    "dev:down": "docker compose --profile core down",
+    "dev:api": "pnpm --filter @waops/api run dev",
+    "dev:worker": "pnpm --filter @waops/worker run dev",
+    "dev:gateway": "pnpm --filter @waops/collector-gateway run dev",
+    "dev:web": "pnpm --filter @waops/web run dev",
+    "db:migrate": "pnpm --filter @waops/db run migrate:deploy",
+    "db:seed": "pnpm --filter @waops/db run seed",
+    "db:generate": "pnpm --filter @waops/db run generate",
+    "agent:dev": "go run ./cmd/waagent",
+    "agent:test": "go test ./..."
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.28.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0",
+    "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "argon2",
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "@swc/core",
+      "msgpackr-extract"
+    ]
+  }
+}

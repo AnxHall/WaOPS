@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waops.internal/contracts/events/event-envelope.v1.schema.json",
+  "title": "WaOPS Event Envelope v1",
+  "type": "object",
+  "required": [
+    "event_id",
+    "schema_version",
+    "tenant_id",
+    "source",
+    "source_type",
+    "event_type",
+    "severity",
+    "observed_at",
+    "received_at",
+    "attributes"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "schema_version": {"const": 1},
+    "tenant_id": {"type": "string", "minLength": 1},
+    "source": {"type": "string"},
+    "source_type": {"type": "string"},
+    "resource_id": {"type": ["string", "null"]},
+    "event_type": {"type": "string"},
+    "severity": {"enum": ["info", "warning", "high", "critical"]},
+    "fingerprint": {"type": ["string", "null"]},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "received_at": {"type": "string", "format": "date-time"},
+    "attributes": {"type": "object"},
+    "correlation_id": {"type": ["string", "null"]},
+    "trace_id": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    profiles: ["core"]
+    environment:
+      POSTGRES_USER: waops
+      POSTGRES_PASSWORD: waops
+      POSTGRES_DB: waops
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["core"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    profiles: ["core", "mail"]
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  minio:
+    image: minio/minio:latest
+    profiles: ["storage", "lab"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: waops
+      MINIO_ROOT_PASSWORD: waops-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  lab-target:
+    image: busybox:1.36
+    profiles: ["lab"]
+    command: ["httpd", "-f", "-p", "0.0.0.0:8080", "-h", "/www"]
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./lab:/www:ro
+
+  traefik:
+    image: traefik:v3.3
+    profiles: ["traefik"]
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.waops.localhost`)
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

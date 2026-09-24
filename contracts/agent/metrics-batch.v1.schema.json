@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WaAgent Metrics Batch v1",
+  "type": "object",
+  "required": ["protocol_version", "agent_id", "sequence", "samples"],
+  "properties": {
+    "protocol_version": {"const": 1},
+    "agent_id": {"type": "string"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "samples": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "type": "object",
+        "required": ["metric", "resource_id", "observed_at", "value"],
+        "properties": {
+          "metric": {"type": "string"},
+          "resource_id": {"type": "string"},
+          "observed_at": {"type": "string", "format": "date-time"},
+          "value": {"type": "number"},
+          "dimensions": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
