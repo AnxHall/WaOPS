@@ -1,0 +1,99 @@
+WaOPS — repository tree (alpha, HARD MISSION 01)
+
+.github/workflows/ci.yml
+AGENTS.md
+BOOTSTRAP_WORKER.md
+CLAUDE.md
+CONTEXT_HANDOFF.md
+OVERWRITE_THESE_FILES.md
+PACKAGE_MANIFEST.md
+README.md
+SECURITY.md
+SPEC_STATUS.md
+TREE.txt
+compose.yaml
+designer.md
+eslint.config.mjs
+package.json
+pnpm-workspace.yaml
+tsconfig.base.json
+.env.example
+contracts/
+  agent/heartbeat.v1.schema.json
+  agent/metrics-batch.v1.schema.json
+  entitlements/modules.v1.yaml
+  events/event-envelope.v1.schema.json
+  permissions/permissions.v1.yaml
+  plugins/plugin-manifest.v1.schema.json
+  README.md
+apps/
+  api/
+    package.json  tsconfig.json  vitest.config.ts  vitest.e2e.config.ts
+    src/
+      main.ts  app.module.ts  errors.ts  correlation.middleware.ts
+      http-exception.filter.ts
+      auth/  auth.module.ts  auth.controller.ts  jwt.service.ts
+             tenant-context.middleware.ts  permissions.guard.ts
+      audit/audit.service.ts
+      hosts/hosts.controller.ts
+      incidents/incidents.controller.ts
+      health/health.controller.ts
+    test/
+      cross-tenant.test.ts  auth-flow.test.ts  helpers.ts
+      e2e/global-setup.ts  e2e/full-flow.e2e.test.ts
+  worker/
+    src/  main.ts  rules.engine.ts  incident.service.ts
+          outbox.dispatcher.ts  notifications.ts
+    test/ rules.test.ts
+  collector-gateway/
+    src/  main.ts  auth.ts
+  web/
+    src/  app/layout.tsx  app/page.tsx  app/globals.css
+          app/login/page.tsx
+          app/(app)/layout.tsx
+          app/(app)/dashboard/page.tsx
+          app/(app)/incidents/page.tsx
+          app/(app)/agents/page.tsx
+          app/(app)/hosts/page.tsx
+          lib/api.ts
+agent/
+  go.mod  go.sum
+  cmd/waagent/main.go
+  internal/
+    app/app.go  config/config.go  credentials/credentials.go
+    logging/logging.go  runtime/runtime.go
+    buffer/buffer.go
+    transport/transport.go
+    scheduler/scheduler.go
+    collectors/linux/  cpu_linux.go  memory_linux.go  collect_linux.go
+                       util_linux.go  errors.go  cpu_linux_test.go
+                       memory_linux_test.go
+    collectors/docker/docker.go
+packages/
+  contracts/  src/(event-envelope, event-types, permissions, modules,
+               agent-protocol, fingerprint, index)  test/(parity, fingerprint)
+  config/     src/index.ts  test/config.test.ts
+  observability/  src/index.ts  test/observability.test.ts
+  tenancy/    src/index.ts  test/tenant-context.test.ts
+  authz/      src/index.ts  test/authz.test.ts
+  entitlements/  src/index.ts  test/registry.test.ts
+  events/     src/(publisher, outbox, index)  test/publisher.test.ts
+  db/         prisma/schema.prisma  prisma/seed.ts  prisma/migrations/*
+              src/index.ts
+docs/
+  00-master/  01-product/  02-architecture/  03-multitenancy/  04-billing/
+  05-agent/  06-modules/  07-events/  08-database/  09-ai/  10-security/
+  11-sources/  12-engineering/  13-api/  14-data-model/  15-roadmap/
+  adr/ (ADR-001 … ADR-010)  agentic/  environments/  threat-models/
+  development/ (api, backend, contracts, database, events, modules, plans,
+                plugins, security, testing, workflows)
+infra/
+  local/README.md  production/README.md
+lab/
+  README.md  SCENARIO_CATALOG.md
+skills/
+  waops-agent-docker  waops-agent-linux  waops-agent-windows  waops-ai
+  waops-architecture  waops-backend  waops-backup  waops-billing
+  waops-event-engine  waops-frontend  waops-multitenancy  waops-postgres
+  waops-release-engineering  waops-security  waops-support  waops-traefik
+  waops-wantry

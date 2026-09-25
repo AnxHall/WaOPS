@@ -1,0 +1,52 @@
+version: 1
+modules:
+  wamonitor:
+    features:
+      - host_monitoring
+      - docker_monitoring
+      - synthetic_checks
+      - application_templates
+  wasupport:
+    features:
+      - tickets
+      - kanban
+      - sla
+      - customer_portal
+      - auto_ticket_from_incident
+  wantry:
+    features:
+      - error_ingestion
+      - issue_grouping
+      - release_context
+  wadatabase:
+    features:
+      - postgres
+      - mysql
+      - mariadb
+      - query_analysis
+  wabackup:
+    features:
+      - backup_jobs
+      - managed_storage
+      - customer_storage
+      - restore_tests
+  waknowledge:
+    features:
+      - documents
+      - runbooks
+      - change_management
+  wanotify:
+    features:
+      - email
+      - webhook
+      - whatsapp
+      - slack
+      - ntfy
+  warelease:
+    features:
+      - github
+  waai:
+    features:
+      - chat
+      - contextual_popover
+      - byok
