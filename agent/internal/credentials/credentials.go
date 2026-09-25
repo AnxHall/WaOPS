@@ -10,11 +10,15 @@ import (
 
 // State persistido localmente (0600). Em produção Windows usa DPAPI/credential
 // manager; foundation mantém arquivo restrito (documentado em agent-security).
+// Sequence: próxima sequence do buffer persistida após flush bem-sucedido —
+// garante continuidade monotônica pós-restart (HARD MISSION 02.6 §24: sem
+// colisão com jobIds antigos no gateway).
 type State struct {
 	AgentID    string   `json:"agent_id"`
 	Credential string   `json:"credential"`
 	Server     string   `json:"server"`
 	Caps       []string `json:"capabilities"`
+	Sequence   int64    `json:"sequence,omitempty"`
 }
 
 var (

@@ -14,17 +14,32 @@ import (
 )
 
 type Scheduler struct {
-	cfg  config.Config
-	rt   *runtime.Runtime
-	tr   *transport.Transport
-	buf  *buffer.Limited
-	log  *slog.Logger
-	seq  int64
+	cfg      config.Config
+	rt       *runtime.Runtime
+	tr       *transport.Transport
+	buf      *buffer.Limited
+	log      *slog.Logger
+	seq      int64
+	batt     BatteryHook     // observabilidade opcional (janela de energia); nil-safe
+	onFlushed func(int64)    // callback pós-flush OK (persistência de sequence §24)
+}
+
+// BatteryHook permite à plataforma (ex.: Windows service) reportar condição
+// que deve pausar flush agressivo; foundation: nil na prática.
+type BatteryHook interface {
+	ShouldThrottle() bool
 }
 
 func New(cfg config.Config, rt *runtime.Runtime, tr *transport.Transport, buf *buffer.Limited) *Scheduler {
 	return &Scheduler{cfg: cfg, rt: rt, tr: tr, buf: buf, log: slog.Default()}
 }
+
+// SetBatteryHook injeta hook opcional de throttle (tests/platform).
+func (s *Scheduler) SetBatteryHook(h BatteryHook) { s.batt = h }
+
+// OnFlushed registra callback chamado após cada flush bem-sucedido com a
+// próxima sequence (persistência externa de sequence — §24).
+func (s *Scheduler) OnFlushed(cb func(nextSeq int64)) { s.onFlushed = cb }
 
 func (s *Scheduler) Start(ctx context.Context) error {
 	heartbeat := time.NewTicker(s.cfg.HeartbeatEvery)
@@ -59,6 +74,12 @@ func (s *Scheduler) beat(ctx context.Context) {
 	}
 }
 
+// CollectOnce executa um único ciclo de coleta (host + docker se disponível) —
+// usado por testes de loopback e por triggers manuais futuros.
+func (s *Scheduler) CollectOnce(ctx context.Context) {
+	s.collectAndQueue(ctx)
+}
+
 func (s *Scheduler) collectAndQueue(ctx context.Context) {
 	// host collectors (linux build tag garante presença)
 	host := hostResourceID(s.rt)
@@ -69,9 +90,18 @@ func (s *Scheduler) collectAndQueue(ctx context.Context) {
 	}
 
 	// docker (quando disponível — discovery automática)
-	if s.rt.Capabilities()[len(s.rt.Capabilities())-1] == "docker" {
+	if hasCapability(s.rt.Capabilities(), "docker") {
 		s.collectDocker(ctx, host)
 	}
+}
+
+func hasCapability(caps []string, want string) bool {
+	for _, c := range caps {
+		if c == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Scheduler) collectDocker(ctx context.Context, hostResourceID string) {
@@ -112,15 +142,19 @@ func (s *Scheduler) collectDocker(ctx context.Context, hostResourceID string) {
 	}
 }
 
-// Flush envia o buffer com retry/backoff simples (sem busy-loop).
+// Flush envia o buffer com retry/backoff exponencial + jitter (sem busy-loop).
 func (s *Scheduler) Flush(ctx context.Context) error {
 	return s.flush(ctx)
 }
 
 func (s *Scheduler) flush(ctx context.Context) error {
 	const maxItems = 100
-	backoff := time.Second
-	for attempt := 0; attempt < 3; attempt++ {
+	const baseBackoff = time.Second
+	for attempt := 0; attempt < 5; attempt++ {
+		if s.batt != nil && s.batt.ShouldThrottle() {
+			// janela de energia/plano: pula este ciclo, coleta continua
+			return nil
+		}
 		batch, firstSeq := s.buf.PeekBatch(maxItems)
 		if len(batch) == 0 {
 			return nil
@@ -128,18 +162,33 @@ func (s *Scheduler) flush(ctx context.Context) error {
 		acked, err := s.tr.SendMetrics(ctx, firstSeq, batch)
 		if err != nil {
 			s.log.Warn("metrics send failed", "attempt", attempt+1, "err", err)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(backoff):
-				backoff *= 2
+			// offline drain guard: buffer acima de 80% ⇒ pula backoff longo
+			// (mantém coleta fluindo e confia no TTL/drop-oldest como válvula).
+			const drainThreshold = 0.8
+			if float64(s.buf.QueuedBytes()) > drainThreshold*float64(s.cfg.BufferMaxBytes) {
 				continue
 			}
+			if err := sleepCtx(ctx, transport.Backoff(attempt, baseBackoff)); err != nil {
+				return err
+			}
+			continue
 		}
 		s.buf.Ack(acked)
+		if s.onFlushed != nil {
+			s.onFlushed(s.buf.NextSequence())
+		}
 		return nil
 	}
 	return nil
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
 }
 
 func hostResourceID(rt *runtime.Runtime) string {
