@@ -33,7 +33,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^11.1.0",
-    "zod": "^3.24.4"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.0",
