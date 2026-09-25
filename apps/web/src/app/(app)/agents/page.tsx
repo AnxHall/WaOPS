@@ -1,101 +1,86 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { useSession } from '@/lib/permissions';
+import { ErrorState, ModuleLockedState, UnavailableData } from '@/components/states';
 
-interface Agent {
-  id: string;
-  name: string;
-  version: string | null;
-  protocolVersion: number | null;
-  status: string;
-  lastSeenAt: string | null;
-}
-
+/**
+ * Agents — read-model de listagem de agentes NÃO existe no Alpha (GAP-RM-005):
+ * não há `GET /api/v1/agents` nem endpoint admin de enrollment tokens.
+ * A tela é honesta: EmptyState declarando o gap + bloco indisponível.
+ * Nenhum mock, nenhum endpoint temporário (regra da 02.5).
+ * Alvo: HARD MISSION 03 — WaMonitor (surface admin de agents).
+ */
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[] | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const { can } = useSession();
   const [error, setError] = useState<string | null>(null);
+  const [probed, setProbed] = useState<boolean | null>(null);
 
-  const load = useCallback(() => {
-    // Lista de agents via API — foundation expõe via hosts por enquanto;
-    // agents list endpoint chega com a UI admin (fase 4 completa). Aqui: db direto não.
-    api<unknown[]>('/api/v1/hosts')
-      .then(() => setAgents((a) => a ?? []))
+  // Probe de permissão/sessão: valida apenas que o contexto responde (auth ok).
+  useEffect(() => {
+    api<unknown>('/api/v1/auth/me')
+      .then(() => setProbed(true))
       .catch((e) => setError(e instanceof Error ? e.message : 'erro'));
   }, []);
 
-  useEffect(load, [load]);
+  if (error) {
+    return (
+      <>
+        <h1 className="page-title">Agents</h1>
+        <ErrorState message="Erro ao verificar sessão" detail={error} onRetry={() => window.location.reload()} />
+      </>
+    );
+  }
 
-  async function createEnrollment() {
-    try {
-      // Foundation: token gerado via API admin (endpoint dedicado chega na fase 4).
-      // Aqui geramos via API de hosts para demonstrar o modal — substituído por:
-      setError('Endpoint de enrollment UI chega na fase 4 (agent admin). Use o fluxo CLI por enquanto.');
-    } finally {
-      void 0;
-    }
+  if (probed === null) {
+    return (
+      <>
+        <h1 className="page-title">Agents</h1>
+        <div className="skeleton" style={{ height: 160 }} />
+      </>
+    );
+  }
+
+  if (!can('agents.read')) {
+    return (
+      <>
+        <h1 className="page-title">Agents</h1>
+        <ModuleLockedState module="Agents" feature="agents.read" />
+      </>
+    );
   }
 
   return (
     <>
       <h1 className="page-title">Agents</h1>
-      {error && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <span className="muted">{error}</span>
-        </div>
-      )}
+
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 className="card-title" style={{ margin: 0 }}>
             Agentes registrados
           </h2>
-          <button className="btn primary" onClick={createEnrollment}>
-            Novo enrollment token
-          </button>
+          <span className="badge neutral" title="GAP-RM-005">
+            Read-model ausente
+          </span>
         </div>
 
-        {agents === null ? (
-          <div className="skeleton" style={{ height: 160, marginTop: 16 }} />
-        ) : agents.length === 0 ? (
-          <div className="empty">
-            <div className="icon">🤖</div>
-            <strong>Nenhum agente</strong>
-            <span className="muted">
-              Crie um enrollment token e instale o WaAgent no seu host Linux.
-            </span>
+        <div className="empty">
+          <div className="icon" aria-hidden>
+            🤖
           </div>
-        ) : (
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Versão</th>
-                <th>Estado</th>
-                <th>Último heartbeat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agents.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.name}</td>
-                  <td className="muted">{a.version ?? '—'}</td>
-                  <td>{a.status}</td>
-                  <td className="muted">
-                    {a.lastSeenAt ? new Date(a.lastSeenAt).toLocaleString('pt-BR') : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+          <strong>Listagem de agentes indisponível no Alpha</strong>
+          <span className="muted">
+            O endpoint <code>GET /api/v1/agents</code> e a criação de enrollment tokens via UI
+            chegam na HARD MISSION 03 (GAP-RM-005). Use o fluxo de enrollment via API do gateway.
+          </span>
+        </div>
 
-        {token && (
-          <div className="card" style={{ marginTop: 16, background: 'var(--surface-dark)', color: '#fff' }}>
-            <strong>Token one-time (expira em 15 min):</strong>
-            <code style={{ display: 'block', marginTop: 8, wordBreak: 'break-all' }}>{token}</code>
-          </div>
-        )}
+        <UnavailableData
+          label="Enrollment token via UI"
+          gapId="GAP-RM-005"
+          reason="Endpoint admin de tokens ausente no Alpha"
+        />
       </div>
     </>
   );

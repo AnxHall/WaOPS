@@ -1,7 +1,14 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { resourceStatusTone } from '@/lib/status';
+
+function statusBadgeClass(status: string): string {
+  const tone = resourceStatusTone(status);
+  return `badge ${tone}`;
+}
 
 interface Host {
   id: string;
@@ -17,6 +24,7 @@ export default function HostsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
+    setError(null);
     api<Host[]>('/api/v1/hosts')
       .then(setHosts)
       .catch((e) => setError(e instanceof Error ? e.message : 'erro'));
@@ -55,12 +63,22 @@ export default function HostsPage() {
         {error && <p style={{ color: 'var(--status-critical)', fontSize: 13 }}>{error}</p>}
       </div>
 
+      {error && (
+        <div className="card state-error" role="alert" style={{ marginBottom: 16 }}>
+          <strong>Erro ao carregar hosts</strong>
+          <span className="muted">{error}</span>
+          <button className="btn ghost" onClick={load} type="button">
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       <div className="card">
         {hosts === null ? (
           <div className="skeleton" style={{ height: 160 }} />
         ) : hosts.length === 0 ? (
           <div className="empty">
-            <div className="icon">🖥️</div>
+            <div className="icon" aria-hidden>🖥️</div>
             <strong>Nenhum host</strong>
             <span className="muted">Adicione o primeiro host</span>
           </div>
@@ -77,10 +95,14 @@ export default function HostsPage() {
             <tbody>
               {hosts.map((h) => (
                 <tr key={h.id}>
-                  <td>{h.name}</td>
-                  <td className="muted">{h.osType ?? '—'}</td>
-                  <td className="muted">{h.environment ?? '—'}</td>
-                  <td>{h.status}</td>
+                  <td data-label="Nome">
+                    <Link href={`/hosts/${h.id}`}>{h.name}</Link>
+                  </td>
+                  <td data-label="OS" className="muted">{h.osType ?? '—'}</td>
+                  <td data-label="Ambiente" className="muted">{h.environment ?? '—'}</td>
+                  <td data-label="Estado">
+                    <span className={statusBadgeClass(h.status)}>{h.status}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

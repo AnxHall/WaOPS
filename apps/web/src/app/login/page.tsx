@@ -54,35 +54,47 @@ export default function LoginPage() {
         </p>
 
         {mode === 'signup' && (
+          <label>
+            <span className="muted">Nome do tenant</span>
+            <input
+              className="input"
+              placeholder="Nome do tenant"
+              value={tenantName}
+              onChange={(e) => setTenantName(e.target.value)}
+              required
+              minLength={2}
+              autoComplete="organization"
+            />
+          </label>
+        )}
+        <label>
+          <span className="muted">Email</span>
           <input
             className="input"
-            placeholder="Nome do tenant"
-            value={tenantName}
-            onChange={(e) => setTenantName(e.target.value)}
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             required
-            minLength={2}
+            autoComplete="email"
           />
-        )}
-        <input
-          className="input"
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="input"
-          type="password"
-          placeholder="Senha"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={mode === 'signup' ? 10 : 1}
-        />
+        </label>
+        <label>
+          <span className="muted">Senha</span>
+          <input
+            className="input"
+            type="password"
+            placeholder="Senha"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={mode === 'signup' ? 10 : 1}
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+          />
+        </label>
 
         {error && (
-          <div role="alert" style={{ color: 'var(--status-critical)', fontSize: 13 }}>
+          <div role="alert" aria-live="polite" style={{ color: 'var(--status-critical)', fontSize: 13 }}>
             {error}
           </div>
         )}
