@@ -82,9 +82,10 @@ Comprovado na baseline:
 
 Débitos restantes da fundação (cada um em missão dedicada):
 
-1. **Frontend acceptance — HARD MISSION 02.5:** designer.md compliance, accessibility, responsive, UI states, permission/entitlement UX; implementação das telas `/monitor/hosts/:id` e `/incidents/:id` previstas no `SCREEN_MAP.md`.
+1. ~~Frontend acceptance — HARD MISSION 02.5~~ **CONCLUÍDA — PASS** (merge `53fe569`): telas `/monitor/hosts/:id` e `/incidents/:id` implementadas com dados reais; status language canônica; permission UX (2 perfis); a11y + responsive; API as-built documentada (`docs/development/api/API_*.md`); gaps registrados em `docs/development/api/READ_MODEL_GAPS.md` (GAP-RM-001..008); `FRONTEND_CAPABILITY_MATRIX.md` + `docs/audits/ALPHA_02_5_DOCUMENTATION_COVERAGE.md`.
 2. **Dependency/SBOM/security scanning externo.**
-3. **WaAgent live resilience — HARD MISSION 02.6:** offline buffer, reconnect, backoff+jitter e buffer saturation/drop policy provados ao vivo (hoje cobertos por design + testes de parser, sem E2E de loopback).
+3. **WaAgent live resilience — HARD MISSION 02.6 (corrente):** offline buffer, reconnect, backoff+jitter e buffer saturation/drop policy provados ao vivo (hoje cobertos por design + testes de parser, sem E2E de loopback). Ao PASS: tag `v0.2.0-alpha`.
+4. **HARD MISSION 03 — WaMonitor (próxima):** consumirá o registry `GAP-RM-001..008` (read-models de métricas, inventário de containers, agents admin, séries temporais).
 
 ## Design
 
@@ -150,7 +151,7 @@ Agentes de desenvolvimento não devem possuir write irrestrito em Docker, banco,
 
 ## Próxima ação de qualquer worker
 
-Missão corrente: **HARD MISSION 02.5 — Frontend Acceptance Gate**, em branch `feature/hard-mission-02-5-frontend` a partir da tag `v0.1.0-alpha-foundation`. Não trabalhar diretamente na `main`.
+Missão corrente: **HARD MISSION 02.6 — Agent Resilience**, em branch `feature/hard-mission-02-6-agent-resilience` a partir da `main`. Ao PASS: merge `--no-ff` + tag `v0.2.0-alpha`. Não trabalhar diretamente na `main`.
 
 1. ler `AGENTS.md`;
 2. ler este arquivo;
