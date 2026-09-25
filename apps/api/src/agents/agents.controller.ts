@@ -7,6 +7,7 @@ import { requireTenantContext } from '@waops/tenancy';
 import { RequirePermission } from '../auth/permissions.guard.js';
 import { ApiError } from '../errors.js';
 import { AuditService } from '../audit/audit.service.js';
+import { RealtimePublisher } from '../realtime/realtime.publisher.js';
 import type { AuthedRequest } from '../auth/tenant-context.middleware.js';
 
 /**
@@ -30,7 +31,10 @@ const MAX_PENDING_TOKENS_PER_TENANT = 20;
 
 @Controller('api/v1/agents')
 export class AgentsController {
-  constructor(@Inject(AuditService) private readonly audit: AuditService) {}
+  constructor(
+    @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(RealtimePublisher) private readonly realtime: RealtimePublisher,
+  ) {}
 
   @Get()
   @RequirePermission('agents.read')
@@ -111,6 +115,15 @@ export class AgentsController {
       where: { id: agent.id },
       data: { status: 'revoked' },
     });
+    // HM05 ADR-010: dashboards drop the agent tile in realtime (best effort).
+    await this.realtime
+      .publish(tenantId, {
+        channel: 'agents',
+        type: 'agent.revoked',
+        occurred_at: new Date().toISOString(),
+        payload: { agent_id: agent.id, name: agent.name },
+      })
+      .catch(() => undefined);
     // Invalidate pending enrollment tokens minted for this agent? No — tokens are
     // tenant-level; revocation only kills the durable credential (auth.ts checks status).
     await this.audit.record({

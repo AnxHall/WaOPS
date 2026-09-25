@@ -244,7 +244,7 @@ model Host {
   networkInterfaces NetworkInterface[]
   filesystems       Filesystem[]
 
-  @@unique([tenantId, machineId])
+  @@unique([tenantId, machineId], map: "hosts_tenant_machine_id_key")
 
   @@unique([tenantId, name])
   @@index([tenantId, status])
@@ -286,6 +286,7 @@ model Agent {
   host   Host?  @relation(fields: [hostId], references: [id])
 
   @@index([tenantId, status])
+  @@index([machineId])
   @@map("agents")
 }
 
@@ -508,8 +509,58 @@ model MetricSample {
   // Composite PK: required for TimescaleDB hypertable on observed_at (ADR-009)
   @@id([id, observedAt])
   @@index([tenantId, resourceId, metric, observedAt(sort: Desc)])
+  @@index([tenantId, metric, observedAt(sort: Desc)], map: "metric_samples_tenant_metric_time_idx")
   @@index([observedAt])
   @@map("metric_samples")
+}
+
+// ── WaSupport (tickets/requests) — HARD MISSION 05 ───────────────────────────
+
+model SupportTicket {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
+  number       Int      @map("number")
+  title        String
+  description  String
+  status       String   @default("open")
+  priority     String   @default("normal")
+  requesterId  String   @map("requester_id") @db.Uuid
+  assigneeId   String?  @map("assignee_id") @db.Uuid
+  incidentId   String?  @map("incident_id") @db.Uuid
+  labels       String[]
+  openSince    DateTime @default(now()) @map("open_since") @db.Timestamptz(6)
+  resolvedAt   DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  comments SupportTicketComment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, updatedAt(sort: Desc)])
+  @@index([tenantId, assigneeId])
+  @@map("support_tickets")
+}
+
+model SupportTicketComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  authorId  String   @map("author_id") @db.Uuid
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, ticketId, createdAt])
+  @@map("support_ticket_comments")
+}
+
+model SupportSequence {
+  tenantId String @id @map("tenant_id") @db.Uuid
+  value    Int    @default(0)
+
+  @@map("support_sequences")
 }
 
 // ── WaNotify (foundation) ─────────────────────────────────────────────────────

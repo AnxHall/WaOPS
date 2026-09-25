@@ -1,0 +1,5 @@
+# HARD MISSION 05 — tolerated non-blocking advisories (module path, one per line).
+# Everything HIGH/CRITICAL fails CI regardless of this file. Each entry MUST have
+# a justification below it (# lines). Remove entries when fixed upstream.
+
+# (empty — no tolerated advisories at v0.5.0-alpha)

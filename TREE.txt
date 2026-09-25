@@ -1,6 +1,9 @@
-WaOPS — repository tree (alpha, tag v0.3.0-alpha-wamonitor)
+WaOPS — repository tree (alpha, tag v0.5.0-alpha)
 
 .github/workflows/ci.yml
+.github/dependabot.yml
+scripts/  audit-gate.mjs  generate-sbom.mjs  audit-allowlist.txt
+scripts/  kill-waops-node.ps1
 AGENTS.md
 BOOTSTRAP_WORKER.md
 CLAUDE.md
@@ -32,6 +35,10 @@ apps/
     src/
       main.ts  app.module.ts  errors.ts  correlation.middleware.ts
       http-exception.filter.ts
+      middleware/  rate-limit.middleware.ts
+      realtime/  realtime.module.ts  realtime.controller.ts
+                 realtime.broker.ts  realtime.publisher.ts
+      support/  support.module.ts  tickets.controller.ts
       auth/  auth.module.ts  auth.controller.ts  jwt.service.ts
              tenant-context.middleware.ts  permissions.guard.ts
       audit/audit.service.ts
@@ -41,11 +48,13 @@ apps/
       agents/agents.controller.ts
       health/health.controller.ts
     test/
-      cross-tenant.test.ts  auth-flow.test.ts  helpers.ts
+      cross-tenant.test.ts  auth-flow.test.ts  rate-limit.test.ts  helpers.ts
       e2e/global-setup.ts  e2e/full-flow.e2e.test.ts  e2e/wamonitor.e2e.test.ts
+      e2e/hardening.e2e.test.ts  e2e/hm05.e2e.test.ts
   worker/
     src/  main.ts  rules.engine.ts  incident.service.ts
           outbox.dispatcher.ts  notifications.ts  identity-bridge.ts
+          realtime.emit.ts
     test/ rules.test.ts  dedup.test.ts  webhook-signature.test.ts
   collector-gateway/
     src/  main.ts  auth.ts
@@ -59,7 +68,9 @@ apps/
           app/(app)/hosts/page.tsx  app/(app)/hosts/[id]/page.tsx
           components/states.tsx  components/MetricChartCard.tsx
           lib/api.ts  lib/status.ts  lib/permissions.tsx
+          lib/sse.ts  lib/use-realtime.ts
     test/ status.test.ts  permission-rendering.test.tsx  incident-detail.test.tsx
+          sse.test.ts
 agent/
   go.mod  go.sum
   cmd/waagent/main.go
@@ -83,6 +94,7 @@ packages/
   entitlements/  src/index.ts  test/registry.test.ts
   events/     src/(publisher, outbox, index)  test/publisher.test.ts
   db/         prisma/schema.prisma  prisma/seed.ts  prisma/migrations/*
+              prisma/migrations/20260925120000_wasupport_tickets/
               src/index.ts
 docs/
   00-master/  01-product/  02-architecture/  03-multitenancy/  04-billing/

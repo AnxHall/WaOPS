@@ -13,6 +13,7 @@ import { NotificationService } from './notifications.js';
 import { DEFAULT_CPU_RULE, RuleStateTracker } from './rules.engine.js';
 import { registerEventCatalogV1, buildEventEnvelope, composeFingerprint } from '@waops/contracts';
 import { randomUUID } from 'node:crypto';
+import { WorkerRealtimeEmitter } from './realtime.emit.js';
 
 loadDotenv({ path: resolve(process.cwd(), '../../.env') });
 const config = loadConfig();
@@ -21,6 +22,8 @@ registerEventCatalogV1();
 
 const tracker = new RuleStateTracker();
 const notifications = new NotificationService();
+
+const realtime = new WorkerRealtimeEmitter(config.env.REDIS_URL);
 
 async function handleEventEnvelope(envelope: import('@waops/contracts').EventEnvelopeV1): Promise<void> {
   const prisma = getPrisma();
@@ -55,6 +58,13 @@ async function handleEventEnvelope(envelope: import('@waops/contracts').EventEnv
   // Open/dedup incident when the event type is incident-capable
   const incident = new IncidentService();
   const { incidentId } = await incident.openFromEvent(envelope);
+
+  // HM05 ADR-010: notify dashboards (best-effort; per-event id dedup client-side)
+  if (incidentId) {
+    await realtime
+      .emitIncidentEvent(envelope, incidentId)
+      .catch((err) => logger.warn({ err }, 'realtime publish failed (non-fatal)'));
+  }
 
   // Fan-out to enabled notification channels (foundation: notify on incident open)
   if (incidentId) {
@@ -238,6 +248,7 @@ async function main(): Promise<void> {
     clearInterval(loop);
     logger.info('shutting down');
     await publisher.close();
+    await realtime.close();
     await disconnectPrisma();
     process.exit(0);
   };

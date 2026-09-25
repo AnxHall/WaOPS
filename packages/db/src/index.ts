@@ -30,6 +30,7 @@ export async function resetDb(prisma: PrismaClient): Promise<void> {
       incident_timeline, incident_events, incidents, events,
       alert_rules,
       service_dependencies, services, containers, filesystems, network_interfaces, agents, hosts,
+      support_ticket_comments, support_tickets, support_sequences,
       usage_counters, subscriptions, tenant_entitlements, plan_entitlements, plans, modules,
       audit_logs, memberships, role_permissions, roles, permissions, users, tenants
     RESTART IDENTITY CASCADE;
