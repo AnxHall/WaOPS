@@ -1,6 +1,7 @@
 # API Endpoint Matrix — Alpha (AS-BUILT)
 
-> Fotografia do código em `cf2783e`. Cada linha foi verificada no controller/handler e nos testes.
+> Fotografia do código. Atualizada em `feature/hard-mission-03-wamonitor` (drift rule de
+> `api-conventions.md`). Cada linha verificada no controller/handler e nos testes.
 > Permissões conforme `contracts/permissions/permissions.v1.yaml`. Envelope de erro:
 > `{ error: { code, message } }` (ver `API_BASELINE_ALPHA.md`).
 
@@ -22,6 +23,12 @@
 | POST | `/api/v1/incidents/:id/acknowledge` | Acknowledge (estado `detected`→`acknowledged`) | User JWT | `incidents.ack` | JWT/TenantContext | — | `{note?}` ≤1000 | `200 Incident` + timeline + audit | 401; 403; 404; **409** estado | — | **Incident Detail** | E2E 11 |
 | POST | `/api/v1/incidents/:id/resolve` | Resolver (`detected/acknowledged`→`resolved`) | User JWT | `incidents.resolve` | JWT/TenantContext | — | `{note?}` ≤1000 | `200 Incident` + timeline + audit | 401; 403; 404; **409** já resolvido | — | **Incident Detail** | E2E 11 |
 | POST | `/api/v1/incidents/:id/reopen` | Reabrir (`resolved`→`acknowledged`) | User JWT | `incidents.resolve` | JWT/TenantContext | — | — | `200 Incident` + timeline + audit | 401; 403; 404 | — | Incident Detail (futuro uso) | cross-tenant suite |
+| GET | `/api/v1/hosts/:id/metrics` | Séries temporais (date_bin, bucketing, filtros metric/mount/interface) | User JWT | `hosts.read` | JWT/TenantContext | — | `?metric&from&to&buckets&mount&interface` (bucket≤200) | `{host_id, resource_id, from, to, bucket_ms, series:{metric:[{t,avg,max,last}]}}` | 400; 401; 403; 404 | — | Host Detail/Incident charts | E2E HM03 3/7 |
+| GET | `/api/v1/hosts/:id/filesystems` | Última amostra por mount (1h) | User JWT | `hosts.read` | JWT/TenantContext | — | — | `{host_id, filesystems:[{mount,used_bytes,available_bytes,observed_at}]}` | 401; 403; 404 | — | Host Detail | E2E HM03 4 |
+| GET | `/api/v1/hosts/:id/containers` | Inventário de containers do host | User JWT | `hosts.read` | JWT/TenantContext | — | — | `[{id,name,image,state,health,lastSeenAt}]` | 401; 403; 404 | — | Host Detail | E2E HM03 5 |
+| GET | `/api/v1/agents` | Listar agentes do tenant | User JWT | `agents.read` | JWT/TenantContext | — | — | `Agent[]` (≤100, com machineId/hostId) | 401; 403 | — | Agents UI | E2E HM03 6 |
+| POST | `/api/v1/agents/enrollment-tokens` | Emitir token one-time (SHA-256 at rest, TTL ≤60min) | User JWT | `agents.enroll` | JWT/TenantContext | — | `{name?, ttl_minutes?}` | `201 {token (uma única vez), token_id, expires_at, install_hint}` + audit | 400; 401; 403 | token one-time no claim | Agents UI | E2E HM03 1/2 |
+| POST | `/api/v1/agents/:id/revoke` | Revogar credencial do agente | User JWT | `agents.revoke` | JWT/TenantContext | — | — | `200 {id, status:"revoked"}` + audit; heartbeats/metrics passam a 401 | 401; 403; 404 | — | Agents UI | E2E HM03 8 |
 | GET | `/healthz` | Liveness | Public | — | — | — | — | `{status:"ok"}` | — | — | Ops/Compose | E2E, resiliência |
 | GET | `/readyz` | Readiness (postgres/redis) | Public | — | — | — | — | `{postgres:"ok\|unavailable", redis:"ok\|unavailable"}` | — | — | Ops/Compose | MISSÃO 02 §20/21 |
 
@@ -36,6 +43,5 @@
 
 ## Não implementado (registrado para não inventar)
 
-`GET /entitlements`, `GET /usage`, `GET /agents` (lista p/ UI), `POST /agents/enrollment-tokens`
-(criação de token via UI/CLI admin), métricas read-model (`GET /hosts/:id/metrics`),
-filesystem/network/containers read-models, SSE. Ver `READ_MODEL_GAPS.md`.
+`GET /entitlements`, `GET /usage`, SSE realtime. Gaps de read-model fechados na HARD MISSION 03:
+ver `READ_MODEL_GAPS.md`. Ver `READ_MODEL_GAPS.md` para o estado restante (GAP-RM-006).
