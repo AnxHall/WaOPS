@@ -17,6 +17,7 @@
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.1.0",
     "@node-rs/argon2": "^2.0.2",
+    "@prisma/client": "^6.19.3",
     "@waops/authz": "workspace:*",
     "@waops/config": "workspace:*",
     "@waops/contracts": "workspace:*",

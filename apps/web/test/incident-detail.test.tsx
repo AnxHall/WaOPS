@@ -17,6 +17,7 @@ const incident: IncidentDetail = {
   severity: 'critical',
   status: 'detected',
   primaryResourceId: 'res_1',
+  primary_resource: null,
   fingerprint: 'fp_1',
   detectedAt: new Date().toISOString(),
   acknowledgedAt: null,
@@ -101,32 +102,50 @@ describe('unavailable telemetry blocks (honest UI for GAP-RM-*)', () => {
     );
   });
 
-  it('renders unavailable blocks with gap ids on host detail page', async () => {
+  it('renders host detail with real charts + filesystems + containers (HM03)', async () => {
     // Mocks DEVEM preceder o import dinâmico da página.
     vi.doMock('next/navigation', () => ({
       useParams: () => ({ id: '11111111-1111-1111-1111-111111111111' }),
       useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
     }));
+    const hostPayload = {
+      id: '11111111-1111-1111-1111-111111111111',
+      name: 'web-01',
+      osType: 'linux',
+      osVersion: '6.1',
+      arch: 'x86_64',
+      environment: 'prod',
+      status: 'online',
+      machineId: 'abcd1234abcd1234',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const seriesPayload = {
+      series: {
+        'host.cpu.usage_percent': [{ t: new Date().toISOString(), avg: 42, max: 60, last: 40 }],
+        'host.memory.used_bytes': [{ t: new Date().toISOString(), avg: 1e9, max: 1.2e9, last: 1.1e9 }],
+        'host.load.1': [{ t: new Date().toISOString(), avg: 0.5, max: 1, last: 0.4 }],
+      },
+    };
+    const fsPayload = {
+      filesystems: [{ mount: '/', used_bytes: 5e9, available_bytes: 15e9, observed_at: new Date().toISOString() }],
+    };
+    const containersPayload = [
+      { id: 'c1', name: 'web', image: 'nginx:latest', state: 'running', health: null, lastSeenAt: new Date().toISOString() },
+    ];
     vi.stubGlobal(
       'fetch',
-      vi.fn(() =>
-        Promise.resolve(
-          new Response(
-            JSON.stringify({
-              id: '11111111-1111-1111-1111-111111111111',
-              name: 'web-01',
-              osType: 'linux',
-              osVersion: '6.1',
-              arch: 'x86_64',
-              environment: 'prod',
-              status: 'online',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-          ),
-        ),
-      ),
+      vi.fn((input: unknown) => {
+        const url = String(input);
+        const payload = url.includes('/metrics')
+          ? seriesPayload
+          : url.includes('/filesystems')
+            ? fsPayload
+            : url.includes('/containers')
+              ? containersPayload
+              : hostPayload;
+        return Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }),
     );
     const HostDetail = (await import('../src/app/(app)/hosts/[id]/page')).default;
     render(
@@ -135,9 +154,10 @@ describe('unavailable telemetry blocks (honest UI for GAP-RM-*)', () => {
       </SessionProvider>,
     );
     await waitFor(() => expect(screen.getAllByText('web-01').length).toBeGreaterThan(0));
-    expect(screen.getAllByText('Indisponível').length).toBeGreaterThanOrEqual(3);
-    expect(screen.getAllByTitle(/GAP-RM-004/).length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle(/GAP-RM-001/).length).toBeGreaterThan(0);
-    expect(screen.getAllByTitle(/GAP-RM-003/).length).toBeGreaterThan(0);
+    // HM03: charts reais, filesystem e containers do inventário
+    await waitFor(() => expect(screen.getByText('Filesystems')).toBeInTheDocument());
+    expect(screen.getByText('/')).toBeInTheDocument();
+    expect(screen.getByText('nginx:latest')).toBeInTheDocument();
+    expect(screen.getAllByRole('img', { name: /série temporal/i }).length).toBe(3);
   });
 });

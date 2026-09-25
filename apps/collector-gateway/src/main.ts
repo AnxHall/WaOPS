@@ -134,6 +134,7 @@ app.post('/api/v1/agents/heartbeat', async (req, reply) => {
   if (!parsed.success) {
     return reply.status(400).send({ error: { code: 'validation_error', message: 'heartbeat schema mismatch' } });
   }
+  const machineId = (req.body as { machine_id?: string })?.machine_id;
   // tenant from identity — ignore anything else in payload
   await prisma.agent.update({
     where: { id: identity.agentId },
@@ -142,6 +143,7 @@ app.post('/api/v1/agents/heartbeat', async (req, reply) => {
       status: 'online',
       version: parsed.data.agent_version,
       protocolVersion: parsed.data.protocol_version,
+      ...(typeof machineId === 'string' && machineId.length >= 8 && machineId.length <= 128 ? { machineId } : {}),
     },
   });
   return reply.send({ protocol_version: 1, ack: parsed.data.agent_id });
@@ -168,7 +170,7 @@ app.post('/api/v1/agents/metrics', async (req, reply) => {
 
   const { Queue } = await import('bullmq');
   const queue = new Queue('ingest.metrics', { connection: { host: new URL(config.env.REDIS_URL).hostname, port: Number(new URL(config.env.REDIS_URL).port || 6379) } });
-  await queue.add('batch', { tenant_id: identity.tenantId, samples: parsed.data.samples }, {
+  await queue.add('batch', { tenant_id: identity.tenantId, agent_id: identity.agentId, samples: parsed.data.samples }, {
     jobId: `metrics_${identity.agentId}_${parsed.data.sequence}`,
     removeOnComplete: 500,
   });
@@ -184,6 +186,7 @@ app.post('/api/v1/agents/events', async (req, reply) => {
     return reply.status(401).send({ error: { code: 'authentication_required', message: 'invalid agent credential' } });
   }
   const body = req.body as {
+    agent_id?: string;
     events?: Array<{ event_type: string; resource_id: string; host_id?: string; observed_at: string; attributes?: Record<string, unknown> }>;
   };
   const events = body?.events ?? [];

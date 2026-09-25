@@ -123,12 +123,14 @@ func (s *Scheduler) collectDocker(ctx context.Context, hostResourceID string) {
 			continue // sensor ausente não é fatal
 		}
 		cpu := docker.ContainerCPUPercent(st)
+		// image dimension feeds the container inventory (HM03 GAP-RM-003)
+		dims := map[string]any{"name": name, "image": c.Image}
 		if cpu > 0 {
-			samples = append(samples, sample("container.cpu.usage_percent", c.ID, now, cpu, map[string]any{"name": name}))
+			samples = append(samples, sample("container.cpu.usage_percent", c.ID, now, cpu, dims))
 		}
 		samples = append(samples,
-			sample("container.memory.used_bytes", c.ID, now, float64(st.MemoryStats.Usage), map[string]any{"name": name}),
-			sample("container.memory.limit_bytes", c.ID, now, float64(st.MemoryStats.Limit), map[string]any{"name": name}),
+			sample("container.memory.used_bytes", c.ID, now, float64(st.MemoryStats.Usage), dims),
+			sample("container.memory.limit_bytes", c.ID, now, float64(st.MemoryStats.Limit), dims),
 		)
 		for _, n := range st.Networks {
 			samples = append(samples,
