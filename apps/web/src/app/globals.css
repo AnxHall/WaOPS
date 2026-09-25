@@ -322,3 +322,230 @@ table.data tr:hover td {
 }
 
 .muted { color: var(--text-tertiary); font-size: 12px; }
+
+/* Label acima do campo (designer.md §4.12) */
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+label > .muted {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Definição de pares key/value (Host/Incident detail) */
+.kv {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.kv > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-default);
+  padding-bottom: 8px;
+}
+
+.kv dt {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.kv dd {
+  margin: 0;
+  text-align: right;
+}
+
+/* ─── Estados canônicos (designer.md §7) ─────────────────────────── */
+
+.state-error,
+.state-locked,
+.state-module {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.state-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.state-error .state-icon { color: var(--status-critical); }
+
+.state-detail { font-size: 12px; }
+.state-detail code {
+  display: block;
+  max-width: 480px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+
+.state-module { opacity: 1; }
+
+/* Dado indisponível (GAP-RM-*): honesto, dentro do layout, sem mock */
+.unavailable {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+.unavailable-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+/* Stale banner */
+.stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(241, 89, 10, 0.08);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  margin-bottom: 16px;
+}
+
+.stale-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--status-warning);
+  flex: none;
+}
+
+/* Mono truncado para IDs opacos (designer.md §2.4) */
+.mono-id {
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* Timeline canônica (designer.md §4.10) */
+.timeline { display: flex; flex-direction: column; }
+
+.timeline-entry {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.timeline-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex: none;
+  position: relative;
+}
+
+.timeline-entry:not(:last-child) .timeline-icon::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 1px;
+  height: 24px;
+  background: var(--border-default);
+}
+
+/* ─── Foco visível + reduced motion (designer.md §8) ─────────────── */
+
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Responsividade (designer.md §8: 640/1024/1280/1600) ────────── */
+
+@media (max-width: 1280px) {
+  .layout { grid-template-columns: 64px 1fr; }
+  .sidebar { padding: 24px 8px; align-items: center; }
+  .sidebar .nav-item { justify-content: center; padding: 9px; width: 100%; }
+  .sidebar .nav-item .nav-label,
+  .sidebar .nav-section { display: none; }
+  .sidebar .logo { font-size: 15px; padding: 0 0 20px; }
+}
+
+@media (max-width: 1024px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 12px;
+    overflow-x: auto;
+  }
+  .sidebar .logo { padding: 0 8px 0 0; }
+  .sidebar .nav-item { width: auto; white-space: nowrap; }
+  .sidebar .nav-footer { margin-top: 0 !important; margin-left: auto; flex-direction: row; }
+  .sidebar .nav-section { display: none; }
+  .main { padding: 0 16px 32px; }
+  .grid.cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .grid.cols-4, .grid.cols-2 { grid-template-columns: 1fr; }
+  .main { padding: 0 12px 24px; }
+  .header { flex-wrap: wrap; height: auto; padding: 8px 0; gap: 8px; }
+  /* Tabelas viram cards empilhados */
+  table.data, table.data tbody, table.data tr, table.data td { display: block; }
+  table.data thead { display: none; }
+  table.data tr { border-top: 1px solid var(--border-default); padding: 8px 0; }
+  table.data td { border-top: none; padding: 4px 12px; }
+  table.data td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--text-tertiary);
+  }
+}

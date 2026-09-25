@@ -71,7 +71,9 @@ export default function DashboardPage() {
         </div>
         <div className="card">
           <div className="kpi-label">Agentes conectados</div>
-          <p className="kpi-value">—</p>
+          <p className="kpi-value" title="GAP-RM-006: read-model de agents ausente no Alpha">
+            —
+          </p>
         </div>
         <div className="card" style={{ background: 'linear-gradient(135deg, #e86a2e, #f7b79b)', color: '#fff' }}>
           <div className="kpi-label" style={{ color: 'rgba(255,255,255,.8)' }}>
@@ -108,14 +110,16 @@ export default function DashboardPage() {
               <tbody>
                 {incidents.slice(0, 5).map((i) => (
                   <tr key={i.id}>
-                    <td>
+                    <td data-label="Severidade">
                       <span className={severityBadgeClass(i.severity)}>
-                        <span className="dot" />
+                        <span className="dot" aria-hidden />
                         {i.severity}
                       </span>
                     </td>
-                    <td>{i.title}</td>
-                    <td>
+                    <td data-label="Título">
+                      <Link href={`/incidents/${i.id}`}>{i.title}</Link>
+                    </td>
+                    <td data-label="Estado">
                       <span className={statusBadgeClass(i.status)}>{i.status}</span>
                     </td>
                   </tr>
@@ -155,9 +159,11 @@ export default function DashboardPage() {
               <tbody>
                 {hosts.slice(0, 5).map((h) => (
                   <tr key={h.id}>
-                    <td>{h.name}</td>
-                    <td className="muted">{h.osType ?? '—'}</td>
-                    <td>
+                    <td data-label="Nome">
+                      <Link href={`/hosts/${h.id}`}>{h.name}</Link>
+                    </td>
+                    <td data-label="OS" className="muted">{h.osType ?? '—'}</td>
+                    <td data-label="Estado">
                       <span className={statusBadgeClass(h.status)}>{h.status}</span>
                     </td>
                   </tr>
