@@ -33,9 +33,25 @@ export class IncidentsController {
   @RequirePermission('incidents.read')
   async get(@Param('id') id: string): Promise<unknown> {
     const tenantId = requireTenantContext().tenantId;
-    const incident = await getPrisma().incident.findFirst({ where: { id, tenantId } });
+    const prisma = getPrisma();
+    const incident = await prisma.incident.findFirst({ where: { id, tenantId } });
     if (!incident) throw ApiError.notFound('Incident');
-    return incident;
+
+    // HM03 (GAP-RM-007): resolve the affected resource to a human name when the
+    // opaque resource id maps to a host machine identity.
+    let primaryResource: { id: string; name: string; kind: string } | null = null;
+    if (incident.primaryResourceId) {
+      const rid = incident.primaryResourceId;
+      if (rid.startsWith('host_')) {
+        const host = await prisma.host.findFirst({ where: { tenantId, machineId: rid.slice(5) } });
+        if (host) primaryResource = { id: host.id, name: host.name, kind: 'host' };
+      } else {
+        const host = await prisma.host.findFirst({ where: { tenantId, id: rid } });
+        if (host) primaryResource = { id: host.id, name: host.name, kind: 'host' };
+      }
+      if (!primaryResource) primaryResource = { id: rid, name: rid.slice(0, 18) + '…', kind: 'unknown' };
+    }
+    return { ...incident, primary_resource: primaryResource };
   }
 
   @Get(':id/timeline')

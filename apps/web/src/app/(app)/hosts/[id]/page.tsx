@@ -5,21 +5,14 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/permissions';
-import { resourceStatusTone, relativeTime } from '@/lib/status';
-import {
-  ErrorState,
-  PermissionDeniedState,
-  Skeleton,
-  StaleBanner,
-  StatusBadge,
-  UnavailableData,
-} from '@/components/states';
+import { relativeTime } from '@/lib/status';
+import { ErrorState, PermissionDeniedState, Skeleton, StatusBadge } from '@/components/states';
+import { MetricChartCard, formatBytes, metricUnitKind, type SeriesMap, type SeriesPoint } from '@/components/MetricChartCard';
 
 /**
- * Host Detail (SCREEN_MAP /monitor/hosts/:id) — dados REAIS.
- * Telemetria (CPU/memória/load/filesystem/network/containers) tem storage mas
- * NÃO tem read-model HTTP no Alpha: exibida como indisponível com GAP-RM-*
- * (READ_MODEL_GAPS.md). Nenhum endpoint temporário é criado (regra da 02.5).
+ * Host Detail (SCREEN_MAP /monitor/hosts/:id) — HM03: telemetria REAL via
+ * /hosts/:id/metrics e /hosts/:id/filesystems; containers do inventário
+ * (identity bridge). GAPs fechados: GAP-RM-001/002/003/004.
  */
 
 interface HostDetail {
@@ -30,9 +23,32 @@ interface HostDetail {
   arch: string | null;
   environment: string | null;
   status: string;
+  machineId: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+interface ContainerRow {
+  id: string;
+  name: string;
+  image: string | null;
+  state: string;
+  health: string | null;
+  lastSeenAt: string;
+}
+
+interface FsRow {
+  mount: string;
+  used_bytes: number;
+  available_bytes: number;
+  observed_at: string;
+}
+
+const CHART_DEFS: Array<{ metric: string; title: string }> = [
+  { metric: 'host.cpu.usage_percent', title: 'CPU' },
+  { metric: 'host.memory.used_bytes', title: 'Memória (usada)' },
+  { metric: 'host.load.1', title: 'Load (1min)' },
+];
 
 export default function HostDetailPage() {
   const params = useParams<{ id: string }>();
@@ -40,15 +56,31 @@ export default function HostDetailPage() {
   const { can } = useSession();
 
   const [host, setHost] = useState<HostDetail | null>(null);
+  const [series, setSeries] = useState<SeriesMap | null>(null);
+  const [filesystems, setFilesystems] = useState<FsRow[] | null>(null);
+  const [containers, setContainers] = useState<ContainerRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ApiError | Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   const load = useCallback(() => {
     if (!id) return;
     setLoading(true);
     setError(null);
-    api<HostDetail>(`/api/v1/hosts/${id}`)
-      .then(setHost)
+    Promise.all([
+      api<HostDetail>(`/api/v1/hosts/${id}`),
+      api<{ series: SeriesMap }>(`/api/v1/hosts/${id}/metrics`).catch(() => null),
+      api<{ filesystems: FsRow[] }>(`/api/v1/hosts/${id}/filesystems`).catch(() => null),
+    ])
+      .then(async ([h, m, fs]) => {
+        setHost(h);
+        setSeries(m?.series ?? {});
+        setFilesystems(fs?.filesystems ?? null);
+        if (h.machineId) {
+          setContainers(
+            await api<ContainerRow[]>(`/api/v1/hosts/${id}/containers`).catch(() => null),
+          );
+        }
+      })
       .catch(setError)
       .finally(() => setLoading(false));
   }, [id]);
@@ -59,15 +91,18 @@ export default function HostDetailPage() {
     return (
       <>
         <nav className="muted" aria-label="Trilha de navegação">
-          <Link href="/hosts">Hosts</Link> / {id?.slice(0, 8)}…
+          <Link href="/hosts">Hosts</Link> / …
         </nav>
         <h1 className="page-title">Carregando…</h1>
-        <div className="card">
-          <Skeleton h={20} w="40%" />
-          <div style={{ height: 16 }} />
-          <Skeleton h={14} w="70%" />
-          <div style={{ height: 16 }} />
-          <Skeleton h={120} />
+        <div className="grid cols-2">
+          <div className="card">
+            <Skeleton h={20} w="40%" />
+            <div style={{ height: 16 }} />
+            <Skeleton h={120} />
+          </div>
+          <div className="card">
+            <Skeleton h={120} />
+          </div>
         </div>
       </>
     );
@@ -106,7 +141,7 @@ export default function HostDetailPage() {
 
   if (!host) return null;
 
-  const agentState: string | null = host.status === 'online' ? 'online' : host.status;
+  const offline = host.status !== 'online';
 
   return (
     <>
@@ -114,16 +149,13 @@ export default function HostDetailPage() {
         <Link href="/hosts">Hosts</Link> / {host.name}
       </nav>
       <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {host.name} <StatusBadge status={agentState} />
+        {host.name} <StatusBadge status={host.status} />
       </h1>
 
-      {host.status !== 'online' && (
+      {offline && (
         <div className="stale-banner" role="status">
           <span className="stale-dot" aria-hidden />
-          <span>
-            Agente {agentState === 'offline' ? 'desconectado' : `em estado ${agentState}`} —
-            telemetria pode estar desatualizada.
-          </span>
+          <span>Agente {host.status} — telemetria pode estar desatualizada.</span>
         </div>
       )}
 
@@ -160,12 +192,14 @@ export default function HostDetailPage() {
               <dt>Atualizado</dt>
               <dd title={host.updatedAt}>{relativeTime(host.updatedAt)}</dd>
             </div>
-            <div>
-              <dt>ID</dt>
-              <dd className="mono-id" title={host.id}>
-                {host.id.slice(0, 18)}…
-              </dd>
-            </div>
+            {host.machineId && (
+              <div>
+                <dt>Machine ID</dt>
+                <dd className="mono-id" title={host.machineId}>
+                  {host.machineId.slice(0, 16)}…
+                </dd>
+              </div>
+            )}
           </dl>
         </section>
 
@@ -178,7 +212,7 @@ export default function HostDetailPage() {
               <div>
                 <dt>Estado</dt>
                 <dd>
-                  <StatusBadge status={agentState} />
+                  <StatusBadge status={host.status} />
                 </dd>
               </div>
               <div>
@@ -187,42 +221,87 @@ export default function HostDetailPage() {
               </div>
             </dl>
           ) : (
-            <UnavailableData label="Detalhes do agente" reason="Sem permissão agents.read" />
+            <p className="muted">Sem permissão agents.read para detalhes do agente.</p>
           )}
         </section>
 
-        <section className="card" aria-labelledby="hd-telemetry">
-          <h2 className="card-title" id="hd-telemetry">
-            Telemetria
+        {CHART_DEFS.map(({ metric, title }) => (
+          <MetricChartCard
+            key={metric}
+            title={title}
+            points={series?.[metric] as SeriesPoint[] | undefined}
+            unit={metricUnitKind(metric)}
+          />
+        ))}
+
+        <section className="card" aria-labelledby="hd-fs">
+          <h2 className="card-title" id="hd-fs">
+            Filesystems
           </h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            Coletada pelo WaAgent e persistida, porém sem read-model HTTP no Alpha
-            (alvo: HARD MISSION 03 — WaMonitor).
-          </p>
-          <UnavailableData label="CPU" gapId="GAP-RM-004" />
-          <UnavailableData label="Memória" gapId="GAP-RM-004" />
-          <UnavailableData label="Load average" gapId="GAP-RM-004" />
+          {!filesystems ? (
+            <p className="muted">Sem read-model no momento (aguardando telemetria).</p>
+          ) : filesystems.length === 0 ? (
+            <p className="muted">Nenhuma amostra de filesystem na última hora.</p>
+          ) : (
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Mount</th>
+                  <th>Usado</th>
+                  <th>Disponível</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filesystems.map((f) => (
+                  <tr key={f.mount}>
+                    <td data-label="Mount" className="mono-id">
+                      {f.mount}
+                    </td>
+                    <td data-label="Usado">{formatBytes(f.used_bytes)}</td>
+                    <td data-label="Disponível">{formatBytes(f.available_bytes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
 
-        <section className="card" aria-labelledby="hd-inventory">
-          <h2 className="card-title" id="hd-inventory">
-            Inventário
+        <section className="card" aria-labelledby="hd-containers">
+          <h2 className="card-title" id="hd-containers">
+            Containers
           </h2>
-          <UnavailableData
-            label="Filesystem (uso por mount)"
-            gapId="GAP-RM-001"
-            reason="Coletado e persistido; read-model ausente"
-          />
-          <UnavailableData
-            label="Network (interfaces/throughput)"
-            gapId="GAP-RM-002"
-            reason="Coletado e persistido; read-model ausente"
-          />
-          <UnavailableData
-            label="Containers (estado, imagem, métricas)"
-            gapId="GAP-RM-003"
-            reason="Coletado; writer de inventário e read-model ausentes"
-          />
+          {!containers ? (
+            <p className="muted">Docker ausente no host ou sem inventário ainda.</p>
+          ) : containers.length === 0 ? (
+            <p className="muted">Nenhum container em execução.</p>
+          ) : (
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Imagem</th>
+                  <th>Estado</th>
+                  <th>Visto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {containers.map((c) => (
+                  <tr key={c.id}>
+                    <td data-label="Nome">{c.name}</td>
+                    <td data-label="Imagem" className="mono-id">
+                      {c.image ?? '—'}
+                    </td>
+                    <td data-label="Estado">
+                      <StatusBadge status={c.state} />
+                    </td>
+                    <td data-label="Visto" className="muted">
+                      {relativeTime(c.lastSeenAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       </div>
     </>

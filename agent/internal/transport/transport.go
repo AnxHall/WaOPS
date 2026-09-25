@@ -88,10 +88,12 @@ func (t *Transport) Enroll(ctx context.Context, token, name, version string, cap
 }
 
 // Heartbeat conforme contracts/agent/heartbeat.v1.schema.json.
+// machine_id liga o agente ao host determinístico (HM03 identity bridge).
 func (t *Transport) Heartbeat(ctx context.Context, rt *runtime.Runtime, bufferBytes int64) error {
 	body := map[string]any{
 		"protocol_version": 1,
 		"agent_id":         t.cred.AgentID,
+		"machine_id":       rt.MachineID(),
 		"agent_version":    rt.Version,
 		"sent_at":          time.Now().UTC().Format(time.RFC3339Nano),
 		"uptime_seconds":   rt.UptimeSeconds(),

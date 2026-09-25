@@ -125,8 +125,9 @@ async function consumeMetrics(): Promise<void> {
   const worker = new Worker(
     'ingest.metrics',
     async (job) => {
-      const { tenant_id, samples } = job.data as {
+      const { tenant_id, agent_id, samples } = job.data as {
         tenant_id: string;
+        agent_id: string;
         samples: Array<{
           metric: string;
           resource_id: string;
@@ -136,6 +137,18 @@ async function consumeMetrics(): Promise<void> {
         }>;
       };
       await withCorrelation({ requestId: `job_${job.id}`, tenantId: tenant_id }, async () => {
+        // HM03 identity bridge: opaque host_<machineId> resource ids → real Host
+        // rows + agent link + container inventory (GAP-RM-003/005). Never blocks
+        // or drops telemetry on failure.
+        let resourceToHost = new Map<string, string>();
+        try {
+          const { bridgeIdentity, bridgeContainers } = await import('./identity-bridge.js');
+          resourceToHost = await bridgeIdentity(tenant_id, agent_id, samples);
+          await bridgeContainers(tenant_id, samples, resourceToHost);
+        } catch (err) {
+          logger.warn({ err }, 'identity bridge failed (telemetry kept)');
+        }
+
         // H2: single batch insert (no N+1 per sample)
         await prisma.metricSample.createMany({
           data: samples.map((sample) => ({

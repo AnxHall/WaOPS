@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const AGENT_PROTOCOL_VERSION = 1 as const;
 
 export const HeartbeatV1 = z.object({
+  machine_id: z.string().min(8).max(128).optional(), // stable host fingerprint (HM03 bridge)
   protocol_version: z.literal(1),
   agent_id: z.string().min(1).max(128),
   agent_version: z.string().min(1).max(64),

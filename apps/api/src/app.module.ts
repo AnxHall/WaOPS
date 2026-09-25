@@ -11,10 +11,12 @@ import { HealthController } from './health/health.controller.js';
 import { AuditService } from './audit/audit.service.js';
 import { HostsController } from './hosts/hosts.controller.js';
 import { IncidentsController } from './incidents/incidents.controller.js';
+import { MetricsController } from './metrics/metrics.controller.js';
+import { AgentsController } from './agents/agents.controller.js';
 
 @Module({
   imports: [AuthModule],
-  controllers: [AuthController, HealthController, HostsController, IncidentsController],
+  controllers: [AuthController, HealthController, HostsController, IncidentsController, MetricsController, AgentsController],
   providers: [
     TokenService,
     AuditService,

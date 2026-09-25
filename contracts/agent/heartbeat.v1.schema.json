@@ -6,6 +6,7 @@
   "properties": {
     "protocol_version": {"const": 1},
     "agent_id": {"type": "string"},
+    "machine_id": {"type": "string", "minLength": 8, "maxLength": 128},
     "agent_version": {"type": "string"},
     "sent_at": {"type": "string", "format": "date-time"},
     "uptime_seconds": {"type": "integer", "minimum": 0},

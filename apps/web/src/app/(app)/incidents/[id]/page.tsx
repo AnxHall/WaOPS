@@ -12,6 +12,7 @@ import {
   Skeleton,
   StatusBadge,
 } from '@/components/states';
+import { MetricChartCard, type SeriesMap } from '@/components/MetricChartCard';
 
 /**
  * Incident Detail (SCREEN_MAP /incidents/:id) — dados REAIS.
@@ -26,6 +27,7 @@ export interface IncidentDetail {
   severity: string;
   status: string;
   primaryResourceId: string | null;
+  primary_resource: { id: string; name: string; kind: string } | null;
   fingerprint: string | null;
   detectedAt: string;
   acknowledgedAt: string | null;
@@ -50,6 +52,8 @@ export default function IncidentDetailPage() {
 
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[] | null>(null);
+  const [hostSeries, setHostSeries] = useState<SeriesMap | null>(null);
+  const [hostSeriesLoading, setHostSeriesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -63,9 +67,17 @@ export default function IncidentDetailPage() {
       api<IncidentDetail>(`/api/v1/incidents/${id}`),
       api<TimelineEntry[]>(`/api/v1/incidents/${id}/timeline`),
     ])
-      .then(([i, t]) => {
+      .then(async ([i, t]) => {
         setIncident(i);
         setTimeline(t);
+        // Related host metric series (GAP-RM-008 closed in HM03)
+        if (i.primary_resource?.kind === 'host') {
+          setHostSeriesLoading(true);
+          const m = await api<{ series: SeriesMap }>(`/api/v1/hosts/${i.primary_resource.id}/metrics?metric=host.cpu.usage_percent`)
+            .catch(() => null);
+          setHostSeries(m?.series ?? null);
+          setHostSeriesLoading(false);
+        }
       })
       .catch(setError)
       .finally(() => setLoading(false));
@@ -183,14 +195,19 @@ export default function IncidentDetailPage() {
             <div>
               <dt>Recurso afetado</dt>
               <dd>
-                {incident.primaryResourceId ? (
-                  <span className="mono-id" title={incident.primaryResourceId}>
-                    {incident.primaryResourceId.slice(0, 18)}…
-                  </span>
+                {incident.primary_resource ? (
+                  incident.primary_resource.kind === 'host' ? (
+                    <Link href={`/hosts/${incident.primary_resource.id}`}>
+                      {incident.primary_resource.name}
+                    </Link>
+                  ) : (
+                    <span className="mono-id" title={incident.primaryResourceId ?? ''}>
+                      {incident.primary_resource.name}
+                    </span>
+                  )
                 ) : (
                   '—'
                 )}
-                <span className="muted"> (resolução de nome: GAP-RM-007)</span>
               </dd>
             </div>
             <div>
@@ -278,15 +295,22 @@ export default function IncidentDetailPage() {
             Métrica relacionada
           </h2>
           <p className="muted" style={{ marginTop: 0 }}>
-            Série do fingerprint que disparou o incidente.
+            Série do host afetado (1h antes → agora).
           </p>
-          <div className="unavailable">
-            <span className="unavailable-label">Série temporal</span>
-            <span className="badge neutral">Indisponível</span>
-            <span className="muted">
-              Sem read-model de métricas no Alpha (alvo: HARD MISSION 03 — WaMonitor).
-            </span>
-          </div>
+          {incident.primary_resource?.kind === 'host' ? (
+            <MetricChartCard
+              title="CPU do host"
+              points={hostSeries?.['host.cpu.usage_percent']}
+              unit="percent"
+              loading={hostSeriesLoading}
+            />
+          ) : (
+            <div className="unavailable">
+              <span className="unavailable-label">Série temporal</span>
+              <span className="badge neutral">Indisponível</span>
+              <span className="muted">Recurso afetado não é um host monitorado.</span>
+            </div>
+          )}
         </section>
       </div>
     </>
