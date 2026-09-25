@@ -47,6 +47,7 @@ Legenda:
 | Frontend Alpha (login/dashboard/agents/hosts/incidents + details) | IMPLEMENTED (alpha, accepted) — HARD MISSION 02.5 PASS |
 | Host detail `/monitor/hosts/:id` + Incident detail `/incidents/:id` | IMPLEMENTED (real APIs; telemetry blocks = honest GAP-RM-* states) |
 | API as-built documentation (endpoint matrix/auth/gateway/read-models) | IMPLEMENTED — HARD MISSION 02.5; drift rule ativa em api-conventions.md |
-| Read-model gaps registry (`GAP-RM-001..008`) | DOCUMENTED — escopo da HARD MISSION 03 (WaMonitor) |
-| WaAgent live resilience proof (offline buffer/reconnect/saturation) | PENDING — HARD MISSION 02.6 |
+| Read-model gaps registry (`GAP-RM-*`) | DOCUMENTED — 7/8 fechados na HARD MISSION 03 (resta GAP-RM-006) |
+| WaMonitor read-models (séries/filesystems/containers/agents admin) | IMPLEMENTED (alpha) — HARD MISSION 03, tag `v0.3.0-alpha-wamonitor` |
+| WaAgent live resilience proof (offline buffer/reconnect/saturation) | IMPLEMENTED — HARD MISSION 02.6 (loopback E2E) |
 | Dependency/SBOM/security scanning | PENDING |

@@ -84,8 +84,8 @@ Débitos restantes da fundação (cada um em missão dedicada):
 
 1. ~~Frontend acceptance — HARD MISSION 02.5~~ **CONCLUÍDA — PASS** (merge `53fe569`): telas `/monitor/hosts/:id` e `/incidents/:id` implementadas com dados reais; status language canônica; permission UX (2 perfis); a11y + responsive; API as-built documentada (`docs/development/api/API_*.md`); gaps registrados em `docs/development/api/READ_MODEL_GAPS.md` (GAP-RM-001..008); `FRONTEND_CAPABILITY_MATRIX.md` + `docs/audits/ALPHA_02_5_DOCUMENTATION_COVERAGE.md`.
 2. **Dependency/SBOM/security scanning externo.**
-3. **WaAgent live resilience — HARD MISSION 02.6 (corrente):** offline buffer, reconnect, backoff+jitter e buffer saturation/drop policy provados ao vivo (hoje cobertos por design + testes de parser, sem E2E de loopback). Ao PASS: tag `v0.2.0-alpha`.
-4. **HARD MISSION 03 — WaMonitor (próxima):** consumirá o registry `GAP-RM-001..008` (read-models de métricas, inventário de containers, agents admin, séries temporais).
+3. ~~WaAgent live resilience — HARD MISSION 02.6~~ **CONCLUÍDA — PASS** (tag `v0.2.0-alpha`): buffer offline, reconnect com backoff+jitter e saturation/drop policy provados ao vivo (loopback E2E).
+4. ~~HARD MISSION 03 — WaMonitor~~ **CONCLUÍDA — PASS** (tag `v0.3.0-alpha-wamonitor`): identity bridge (Host por machineId + Agent.hostId + inventário de containers no ingest), séries com `date_bin`, filesystems por mount, containers, agents admin (list/token/revoke), resolução de recurso nos incidentes e charts reais. GAP-RM-001/002/003/004/005/007/008 **fechados**; resta GAP-RM-006.
 
 ## Design
 
@@ -151,7 +151,7 @@ Agentes de desenvolvimento não devem possuir write irrestrito em Docker, banco,
 
 ## Próxima ação de qualquer worker
 
-Missão corrente: **HARD MISSION 02.6 — Agent Resilience**, em branch `feature/hard-mission-02-6-agent-resilience` a partir da `main`. Ao PASS: merge `--no-ff` + tag `v0.2.0-alpha`. Não trabalhar diretamente na `main`.
+Missão corrente: **HARD MISSION 04 — Hardening do WaMonitor** (audit adversarial das rotas de métricas/agents: performance `date_bin`, cardinalidade, quota, rollups Timescale com janelas longas 7d/30d, GAP-RM-006). Branch dedicada a partir da `main`; merge `--no-ff` + tag ao PASS. Não trabalhar diretamente na `main`.
 
 1. ler `AGENTS.md`;
 2. ler este arquivo;

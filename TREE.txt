@@ -1,4 +1,4 @@
-WaOPS — repository tree (alpha, HARD MISSION 01)
+WaOPS — repository tree (alpha, tag v0.3.0-alpha-wamonitor)
 
 .github/workflows/ci.yml
 AGENTS.md
@@ -37,14 +37,16 @@ apps/
       audit/audit.service.ts
       hosts/hosts.controller.ts
       incidents/incidents.controller.ts
+      metrics/metrics.controller.ts
+      agents/agents.controller.ts
       health/health.controller.ts
     test/
       cross-tenant.test.ts  auth-flow.test.ts  helpers.ts
-      e2e/global-setup.ts  e2e/full-flow.e2e.test.ts
+      e2e/global-setup.ts  e2e/full-flow.e2e.test.ts  e2e/wamonitor.e2e.test.ts
   worker/
     src/  main.ts  rules.engine.ts  incident.service.ts
-          outbox.dispatcher.ts  notifications.ts
-    test/ rules.test.ts
+          outbox.dispatcher.ts  notifications.ts  identity-bridge.ts
+    test/ rules.test.ts  dedup.test.ts  webhook-signature.test.ts
   collector-gateway/
     src/  main.ts  auth.ts
   web/
@@ -52,28 +54,30 @@ apps/
           app/login/page.tsx
           app/(app)/layout.tsx
           app/(app)/dashboard/page.tsx
-          app/(app)/incidents/page.tsx
+          app/(app)/incidents/page.tsx  app/(app)/incidents/[id]/page.tsx
           app/(app)/agents/page.tsx
-          app/(app)/hosts/page.tsx
-          lib/api.ts
+          app/(app)/hosts/page.tsx  app/(app)/hosts/[id]/page.tsx
+          components/states.tsx  components/MetricChartCard.tsx
+          lib/api.ts  lib/status.ts  lib/permissions.tsx
+    test/ status.test.ts  permission-rendering.test.tsx  incident-detail.test.tsx
 agent/
   go.mod  go.sum
   cmd/waagent/main.go
   internal/
-    app/app.go  config/config.go  credentials/credentials.go
+    app/app.go  loopback_test.go  config/config.go  credentials/credentials.go
     logging/logging.go  runtime/runtime.go
-    buffer/buffer.go
-    transport/transport.go
+    buffer/buffer.go  buffer_test.go
+    transport/transport.go  transport/retry.go
     scheduler/scheduler.go
     collectors/linux/  cpu_linux.go  memory_linux.go  collect_linux.go
-                       util_linux.go  errors.go  cpu_linux_test.go
-                       memory_linux_test.go
+                       util_linux.go  errors.go  *_test.go
     collectors/docker/docker.go
 packages/
   contracts/  src/(event-envelope, event-types, permissions, modules,
-               agent-protocol, fingerprint, index)  test/(parity, fingerprint)
+               agent-protocol, fingerprint, index)  test/(parity, fingerprint,
+               protocol-attacks)
   config/     src/index.ts  test/config.test.ts
-  observability/  src/index.ts  test/observability.test.ts
+  observability/  src/index.ts  test/(observability, redaction).test.ts
   tenancy/    src/index.ts  test/tenant-context.test.ts
   authz/      src/index.ts  test/authz.test.ts
   entitlements/  src/index.ts  test/registry.test.ts
@@ -84,9 +88,11 @@ docs/
   00-master/  01-product/  02-architecture/  03-multitenancy/  04-billing/
   05-agent/  06-modules/  07-events/  08-database/  09-ai/  10-security/
   11-sources/  12-engineering/  13-api/  14-data-model/  15-roadmap/
-  adr/ (ADR-001 … ADR-010)  agentic/  environments/  threat-models/
-  development/ (api, backend, contracts, database, events, modules, plans,
-                plugins, security, testing, workflows)
+  adr/ (ADR-001 … ADR-010)  agentic/  environments/  threat-models/  audits/
+  development/ (api incl. API_*.md as-built + READ_MODEL_GAPS, backend,
+                contracts, database, events, modules, plans, plugins,
+                security, testing, workflows, frontend incl.
+                FRONTEND_CAPABILITY_MATRIX.md, agent incl. agent-buffering)
 infra/
   local/README.md  production/README.md
 lab/
