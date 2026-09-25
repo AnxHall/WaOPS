@@ -36,13 +36,19 @@ function statusBadgeClass(status: string): string {
 export default function DashboardPage() {
   const [incidents, setIncidents] = useState<Incident[] | null>(null);
   const [hosts, setHosts] = useState<Host[] | null>(null);
+  const [agentsOnline, setAgentsOnline] = useState<number | null>(null); // GAP-RM-006 closed
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api<Incident[]>('/api/v1/incidents'), api<Host[]>('/api/v1/hosts')])
-      .then(([i, h]) => {
+    Promise.all([
+      api<Incident[]>('/api/v1/incidents'),
+      api<Host[]>('/api/v1/hosts'),
+      api<{ status: string }[]>('/api/v1/agents').catch(() => null),
+    ])
+      .then(([i, h, a]) => {
         setIncidents(i);
         setHosts(h);
+        if (a) setAgentsOnline(a.filter((x) => x.status === 'online').length);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar'));
   }, []);
@@ -71,9 +77,7 @@ export default function DashboardPage() {
         </div>
         <div className="card">
           <div className="kpi-label">Agentes conectados</div>
-          <p className="kpi-value" title="GAP-RM-006: read-model de agents ausente no Alpha">
-            —
-          </p>
+          <p className="kpi-value">{agentsOnline === null ? '—' : agentsOnline}</p>
         </div>
         <div className="card" style={{ background: 'linear-gradient(135deg, #e86a2e, #f7b79b)', color: '#fff' }}>
           <div className="kpi-label" style={{ color: 'rgba(255,255,255,.8)' }}>

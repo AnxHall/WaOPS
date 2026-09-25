@@ -25,6 +25,12 @@ const QuerySchema = z.object({
 const DEFAULT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
 const DEFAULT_BUCKETS = 60;
 
+const LongQuerySchema = z.object({
+  metric: z.string().min(1).max(128).optional(),
+  days: z.coerce.number().int().min(1).max(90).optional().default(7), // 7d/30d/…≤90d
+  buckets: z.coerce.number().int().min(10).max(500).optional(),
+});
+
 interface SeriesPoint {
   t: string;
   avg: number;
@@ -146,6 +152,78 @@ export class MetricsController {
         available_bytes: r.available,
         observed_at: new Date(r.observed_at).toISOString(),
       })),
+    };
+  }
+
+  /**
+   * Long-window series (7d/30d) from the Timescale continuous aggregate
+   * `metric_samples_5m` (ADR-009). Raw samples are retained 30d; the rollup
+   * extends history to 365d. Falls back to an error hint if Timescale is absent.
+   */
+  @Get(':id/metrics/long')
+  @RequirePermission('hosts.read')
+  async longSeries(@Param('id') id: string, @Query() query: Record<string, unknown>): Promise<unknown> {
+    const parsed = LongQuerySchema.safeParse(query);
+    if (!parsed.success) {
+      throw ApiError.validation('invalid long-series query', parsed.error.flatten());
+    }
+    const { metric, days, buckets: b } = parsed.data;
+    const tenantId = requireTenantContext().tenantId;
+    const prisma = getPrisma();
+
+    const host = await prisma.host.findFirst({ where: { id, tenantId } });
+    if (!host) throw ApiError.notFound('Host');
+    const resourceId = host.machineId ? `host_${host.machineId}` : host.id;
+
+    const toMs = Date.now();
+    const fromMs = toMs - days * 24 * 60 * 60 * 1000;
+
+    const metricNames = metric ? [metric] : ['host.cpu.usage_percent', 'host.memory.used_bytes'];
+
+    type RollupPoint = { metric: string; t: Date; avg: number; max: number; last: number };
+    let rows: RollupPoint[];
+    try {
+      // CAgg provides avg/max per 5m bucket; 'last' is the newest bucket's avg.
+      const raw = await prisma.$queryRaw<Array<{ metric: string; t: Date; avg: number; max: number }>>`
+        SELECT metric, bucket AS t, avg::float8 AS avg, "max"::float8 AS max
+        FROM metric_samples_5m
+        WHERE tenant_id = ${tenantId}::uuid
+          AND resource_id = ${resourceId}
+          AND metric IN (${Prisma.join(metricNames)})
+          AND bucket >= ${new Date(fromMs).toISOString()}::timestamptz
+          AND bucket <= ${new Date(toMs).toISOString()}::timestamptz
+        ORDER BY metric ASC, bucket ASC`;
+      // reshape: per metric, the newest bucket's avg doubles as 'last' for all points
+      const byMetric = new Map<string, Array<{ t: Date; avg: number; max: number }>>();
+      for (const r of raw) {
+        (byMetric.get(r.metric) ?? byMetric.set(r.metric, []).get(r.metric)!).push({ t: r.t, avg: r.avg, max: r.max });
+      }
+      rows = [];
+      for (const [metric, pts] of byMetric) {
+        const lastAvg = pts[pts.length - 1]?.avg ?? 0;
+        for (const p of pts) rows.push({ metric, t: p.t, avg: p.avg, max: p.max, last: lastAvg });
+      }
+    } catch {
+      throw new ApiError('dependency_unavailable', 'long-window rollup unavailable (Timescale aggregate missing)', 503);
+    }
+
+    // Downsample to the requested bucket count.
+    const series: Record<string, Array<{ t: string; avg: number; max: number; last: number }>> = {};
+    for (const r of rows) {
+      (series[r.metric] ??= []).push({ t: new Date(r.t).toISOString(), avg: r.avg, max: r.max, last: r.last });
+    }
+    const downsampled: typeof series = {};
+    for (const [m, pts] of Object.entries(series)) {
+      const step = Math.max(1, Math.ceil(pts.length / (b ?? 288)));
+      downsampled[m] = pts.filter((_, i) => i % step === 0);
+    }
+
+    return {
+      host_id: host.id,
+      resource_id: resourceId,
+      window_days: days,
+      source: 'metric_samples_5m (continuous aggregate)',
+      series: downsampled,
     };
   }
 }
