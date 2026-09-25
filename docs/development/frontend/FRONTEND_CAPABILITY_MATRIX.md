@@ -9,12 +9,12 @@
 | Tela            | API real | Loading | Empty | Error | Offline/Stale | RBAC | Responsive | A11y |
 |-----------------|----------|---------|-------|-------|---------------|------|------------|------|
 | Login           | ✅       | ✅¹     | N/A   | ✅    | —             | —    | ✅         | ✅   |
-| Dashboard       | Partial (GAP-RM-004, GAP-RM-006) | ✅ | ✅ | ✅ | —² | ✅ | ✅ | ✅ |
+| Dashboard       | Partial (séries = GAP-RM-004; agentes ✅ desde HM04) | ✅ | ✅ | ✅ | —² | ✅ | ✅ | ✅ |
 | Hosts           | ✅       | ✅      | ✅    | ✅    | —³            | ✅   | ✅         | ✅   |
-| Host Detail     | Partial (GAP-RM-001/002/003/004/007) | ✅ | N/A (404 tratado) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Host Detail     | ✅ (charts/filesystems/containers reais desde HM03) | ✅ | N/A (404 tratado) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Incidents       | ✅       | ✅      | ✅    | ✅    | —²            | ✅   | ✅         | ✅   |
-| Incident Detail | Partial (GAP-RM-007, GAP-RM-008) | ✅ | N/A (404 tratado) | ✅ | —⁴ | ✅ | ✅ | ✅ |
-| Agents          | ❌ (GAP-RM-005) | ✅ | ✅ (honesto) | ✅ | — | ✅ | ✅ | ✅ |
+| Incident Detail | ✅ (recurso + chart CPU desde HM03/HM04) | ✅ | N/A (404 tratado) | ✅ | —⁴ | ✅ | ✅ | ✅ |
+| Agents          | ✅ (list/token/revoke reais desde HM03) | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ |
 
 ## Evidências por coluna
 

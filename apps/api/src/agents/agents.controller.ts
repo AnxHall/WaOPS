@@ -25,6 +25,9 @@ const TokenResponse = {
   token_ttl_default_minutes: 15,
 };
 
+/** HM04 adversarial audit: unlimited token minting was a spam vector. */
+const MAX_PENDING_TOKENS_PER_TENANT = 20;
+
 @Controller('api/v1/agents')
 export class AgentsController {
   constructor(@Inject(AuditService) private readonly audit: AuditService) {}
@@ -63,6 +66,15 @@ export class AgentsController {
     const input = CreateTokenSchema.parse(body ?? {});
     const tenantId = requireTenantContext().tenantId;
     const prisma = getPrisma();
+
+    // Quota (HM04): cap unconsumed tokens per tenant — minting is not free state.
+    const pending = await prisma.agentEnrollmentToken.count({
+      where: { tenantId, status: { in: ['active', 'claiming'] } },
+    });
+    if (pending >= MAX_PENDING_TOKENS_PER_TENANT) {
+      throw ApiError.quotaExceeded('agent_enrollment_tokens', MAX_PENDING_TOKENS_PER_TENANT);
+    }
+
     const token = `enr_${randomBytes(24).toString('hex')}`; // 192-bit CSPRNG, opaque
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const ttlMs = (input.ttl_minutes ?? TokenResponse.token_ttl_default_minutes) * 60_000;

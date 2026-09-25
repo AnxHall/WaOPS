@@ -11,7 +11,7 @@ Accepted.
 - **PK composta `(id, observed_at)`** — exigência do Timescale (coluna de particionamento no índice único).
 - Índices: `(tenant_id, resource_id, metric, observed_at DESC)` para leitura por recurso; `(observed_at)` para maintenance.
 - **Retenção baseline: 30 dias** (`add_retention_policy`), configurável via env `METRIC_RETENTION_DAYS` (aplicada no seed; default 30). Auditoria HARD MISSION 02 (§34): o valor é **default operacional, não limite arquitetural** — a policy é recriada por seed/operador; retenção por plano chega com billing (usage metering de `retention_days` já previsto no catálogo).
-- Rollups contínuos ficam para a fase WaMonitor (quando volume de query justificar).
+- Rollups contínuos: **implementados na HARD MISSION 04** — `metric_samples_5m` (agregado contínuo de 5 minutos por tenant/resource/metric/mount/interface), refresh automático a cada 10min, retention do agregado **365 dias** enquanto o raw mantém 30d. Janelas longas (7d/30d/≤90d) leem do agregado via `GET /hosts/:id/metrics/long`.
 
 ## Consequências
 - Telemetria particionada por tempo sem operar dois bancos no local dev.

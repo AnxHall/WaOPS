@@ -3,11 +3,10 @@
 > Registro canônico de dados **coletados/persistidos mas sem read-model HTTP**.
 > Cada gap tem identidade persistente (`GAP-RM-*`); a FRONTEND_CAPABILITY_MATRIX referencia estes IDs.
 >
-> **STATUS pós-HARD MISSION 03:** GAP-RM-001/002/003/004/005/007/008 **FECHADOS**
-> (read-models implementados; ver `API_ENDPOINT_MATRIX.md`). GAP-RM-006 segue aberto.
-> Nota de implementação: a ponte identidade (Host por machineId + containers) roda no
-> ingest (`apps/worker/src/identity-bridge.ts`), e o filtro filesystem/network usa
-> `dimensions_json->>mount/interface` com índice dedicado em `(tenant_id, metric, observed_at DESC)`.
+> **STATUS pós-HARD MISSION 04:** **REGISTRO VAZIO** — todos os gaps (001–008) fechados.
+> GAP-RM-006 (agentes conectados no dashboard) foi fechado na HM04 via `GET /api/v1/agents`.
+> Novas capacidades HM04: agregado contínuo `metric_samples_5m` (retention 365d) e
+> `GET /hosts/:id/metrics/long?days=N` (7d/30d, ≤90d) — ver ADR-009 e `API_ENDPOINT_MATRIX.md`.
 
 ---
 
