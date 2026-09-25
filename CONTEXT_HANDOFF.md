@@ -56,6 +56,36 @@ SaaS multi-tenant de observabilidade e operações.
 - Sem public status page inicialmente.
 - Módulos conversam por contratos/eventos.
 
+## Estado da baseline (pós HARD MISSION 02)
+
+**Baseline congelada:** `v0.1.0-alpha-foundation` — commit `8ef9a6c` na `main`.
+
+**Auditoria adversarial (HARD MISSION 02):** **PASS WITH CONDITIONS** — nenhum BLOCKER, CRITICAL ou HIGH permanece aberto.
+
+Comprovado na baseline:
+
+- migrations from zero (banco vazio → `migrate deploy` limpo);
+- seed idempotente (execução dupla sem duplicação de permissions/roles/modules/plans);
+- tenant isolation adversarial (3 tenants; cross-tenant retorna 404/denial consistente em todas as superfícies);
+- RBAC (deny-by-default, authorization por permission no backend);
+- enrollment concorrente (claim atômico — exatamente 1 vencedor em corrida de requests);
+- hashing de enrollment token (SHA-256 at rest; token nunca armazenado nem logado em plaintext);
+- outbox idempotente (republish após crash não duplica evento/timeline);
+- notification dedup (republish não re-envia email/webhook);
+- JWT algorithm pinning (HS256 fixado, iss/aud verificados);
+- protocol attack validation (NaN/Infinity rejeitados, dimensions limitadas, timestamps e payload limits);
+- Redis degradation/recovery (`readyz` observável, liveness mantida, recovery sem busy-loop);
+- PostgreSQL degradation/recovery;
+- Go build/test/vet (cross-compile Linux em container);
+- lint e typecheck do monorepo com zero erros;
+- E2E 13/13 (signup → login → RBAC → enrollment → heartbeat → métricas → regra → incidente → email real no Mailpit → dup batch → ack/resolve → cross-tenant denial).
+
+Débitos restantes da fundação (cada um em missão dedicada):
+
+1. **Frontend acceptance — HARD MISSION 02.5:** designer.md compliance, accessibility, responsive, UI states, permission/entitlement UX; implementação das telas `/monitor/hosts/:id` e `/incidents/:id` previstas no `SCREEN_MAP.md`.
+2. **Dependency/SBOM/security scanning externo.**
+3. **WaAgent live resilience — HARD MISSION 02.6:** offline buffer, reconnect, backoff+jitter e buffer saturation/drop policy provados ao vivo (hoje cobertos por design + testes de parser, sem E2E de loopback).
+
 ## Design
 
 O arquivo raiz `designer.md` é a autoridade visual/UX.
@@ -119,6 +149,8 @@ Produção não é ambiente de desenvolvimento.
 Agentes de desenvolvimento não devem possuir write irrestrito em Docker, banco, Portainer, Traefik ou storage de produção.
 
 ## Próxima ação de qualquer worker
+
+Missão corrente: **HARD MISSION 02.5 — Frontend Acceptance Gate**, em branch `feature/hard-mission-02-5-frontend` a partir da tag `v0.1.0-alpha-foundation`. Não trabalhar diretamente na `main`.
 
 1. ler `AGENTS.md`;
 2. ler este arquivo;

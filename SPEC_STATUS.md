@@ -36,10 +36,15 @@ Legenda:
 | Kubernetes support | PENDING |
 | Remote actions/RMM | PENDING |
 | Frontend visual specification (`designer.md`) | APPROVED (created; Zaptix-derived language) |
-| Platform foundation (monorepo/config/logging/health/CI) | IMPLEMENTED (alpha) |
-| Identity/Tenancy foundation (auth/RBAC/TenantContext/audit) | IMPLEMENTED (alpha) |
+| Platform foundation (monorepo/config/logging/health/CI) | IMPLEMENTED (alpha, audited) |
+| Identity/Tenancy foundation (auth/RBAC/TenantContext/audit) | IMPLEMENTED (alpha, audited) |
 | Commercial foundation (modules/entitlements/quotas/usage) | IMPLEMENTED (structural) |
-| Resource foundation (WaInventory subset) | IMPLEMENTED (alpha) |
-| Event foundation (envelope v1/outbox/incidents/timeline) | IMPLEMENTED (alpha) |
-| WaAgent (Go; linux collectors; docker; enrollment) | IMPLEMENTED (alpha) |
-| WaNotify foundation (email/webhook + deliveries) | IMPLEMENTED (alpha) |
+| Resource foundation (WaInventory subset) | IMPLEMENTED (alpha, audited) |
+| Event foundation (envelope v1/outbox/incidents/timeline) | IMPLEMENTED (alpha, audited) |
+| WaAgent (Go; linux collectors; docker; enrollment) | IMPLEMENTED (alpha, audited) |
+| WaNotify foundation (email/webhook + deliveries) | IMPLEMENTED (alpha, audited) |
+| **Baseline `v0.1.0-alpha-foundation` (HARD MISSION 01+02) | FROZEN — audit verdict PASS WITH CONDITIONS; no BLOCKER/CRITICAL/HIGH open |
+| Frontend Alpha (login/dashboard/agents/hosts/incidents) | IMPLEMENTED (alpha) — acceptance gate pending: HARD MISSION 02.5 |
+| Host detail `/monitor/hosts/:id` + Incident detail `/incidents/:id` | PENDING — in scope of HARD MISSION 02.5 |
+| WaAgent live resilience proof (offline buffer/reconnect/saturation) | PENDING — HARD MISSION 02.6 |
+| Dependency/SBOM/security scanning | PENDING |
