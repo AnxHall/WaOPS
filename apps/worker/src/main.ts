@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { config as loadDotenv } from 'dotenv';
 import { resolve } from 'node:path';
+import { Prisma } from '@prisma/client';
+import type { ThresholdRule } from './rules.engine.js';
 import { createLogger, withCorrelation, getCorrelationLogger } from '@waops/observability';
 import { loadConfig } from '@waops/config';
 import { getPrisma, disconnectPrisma } from '@waops/db';
@@ -8,7 +10,7 @@ import { BullMQEventPublisher, parseRedis, WAOPS_EVENT_QUEUE } from '@waops/even
 import { OutboxDispatcher } from './outbox.dispatcher.js';
 import { IncidentService } from './incident.service.js';
 import { NotificationService } from './notifications.js';
-import { DEFAULT_CPU_RULE, RuleStateTracker, type ThresholdRule } from './rules.engine.js';
+import { DEFAULT_CPU_RULE, RuleStateTracker } from './rules.engine.js';
 import { registerEventCatalogV1, buildEventEnvelope, composeFingerprint } from '@waops/contracts';
 import { randomUUID } from 'node:crypto';
 
@@ -20,14 +22,13 @@ registerEventCatalogV1();
 const tracker = new RuleStateTracker();
 const notifications = new NotificationService();
 
-/** Rules evaluated on metric ingest (foundation: 1 real rule from ALERT config/env). */
-const RULES: ThresholdRule[] = [DEFAULT_CPU_RULE];
-
 async function handleEventEnvelope(envelope: import('@waops/contracts').EventEnvelopeV1): Promise<void> {
   const prisma = getPrisma();
 
-  // Store domain event (idempotent by event_id)
-  await prisma.domainEvent
+  // Store domain event (idempotent by event_id). A duplicate event (outbox
+  // republish after crash, queue redelivery) MUST be fully skipped: no second
+  // timeline entry, no notification fan-out (HARD MISSION 02 / C2, §18/§38).
+  const stored = await prisma.domainEvent
     .create({
       data: {
         id: envelope.event_id,
@@ -42,9 +43,14 @@ async function handleEventEnvelope(envelope: import('@waops/contracts').EventEnv
         correlationId: envelope.correlation_id ?? null,
       },
     })
-    .catch(() => {
-      logger.debug({ event_id: envelope.event_id }, 'event already stored (dedup)');
+    .catch((err) => {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        logger.debug({ event_id: envelope.event_id }, 'duplicate event skipped (idempotent)');
+        return null;
+      }
+      throw err;
     });
+  if (!stored) return; // duplicate — downstream is exactly-once per event_id
 
   // Open/dedup incident when the event type is incident-capable
   const incident = new IncidentService();
@@ -89,6 +95,33 @@ async function consumeMetrics(): Promise<void> {
   const { Worker } = await import('bullmq');
   const prisma = getPrisma();
 
+  // Rules cache (HARD MISSION 02 / H1): threshold/duration come from alert_rules
+  // rows (per tenant, enabled). Engine receives rule definitions — no hardcoded
+  // commercial rule. DEFAULT_CPU_RULE is only a fallback when a tenant has no
+  // rule for the metric (documented default, not fixed policy).
+  let rulesCache: { rules: ThresholdRule[]; loadedAt: number } = { rules: [], loadedAt: 0 };
+  async function loadRules(): Promise<ThresholdRule[]> {
+    if (Date.now() - rulesCache.loadedAt < 30_000) return rulesCache.rules;
+    const rows = await prisma.alertRule.findMany({ where: { enabled: true } });
+    const fromDb: ThresholdRule[] = [];
+    for (const r of rows) {
+      const c = r.conditionJson as { metric?: string; comparator?: string; threshold?: number; consecutive_samples?: number };
+      const metric = typeof c.metric === 'string' ? c.metric : '';
+      const threshold = Number(c.threshold ?? NaN);
+      if (!metric || !Number.isFinite(threshold)) continue;
+      fromDb.push({
+        metric,
+        comparator: c.comparator === '<' ? '<' : '>',
+        threshold,
+        consecutiveSamples: Number(c.consecutive_samples ?? 6),
+        severity: r.severity as ThresholdRule['severity'],
+        eventType: r.eventType,
+      });
+    }
+    rulesCache = { rules: fromDb, loadedAt: Date.now() };
+    return fromDb;
+  }
+
   const worker = new Worker(
     'ingest.metrics',
     async (job) => {
@@ -103,21 +136,25 @@ async function consumeMetrics(): Promise<void> {
         }>;
       };
       await withCorrelation({ requestId: `job_${job.id}`, tenantId: tenant_id }, async () => {
-        for (const sample of samples) {
-          await prisma.metricSample.create({
-            data: {
-              tenantId: tenant_id,
-              resourceId: sample.resource_id,
-              metric: sample.metric,
-              value: sample.value,
-              dimensionsJson: (sample.dimensions ?? {}) as object,
-              observedAt: new Date(sample.observed_at),
-            },
-          });
+        // H2: single batch insert (no N+1 per sample)
+        await prisma.metricSample.createMany({
+          data: samples.map((sample) => ({
+            tenantId: tenant_id,
+            resourceId: sample.resource_id,
+            metric: sample.metric,
+            value: sample.value,
+            dimensionsJson: (sample.dimensions ?? {}) as object,
+            observedAt: new Date(sample.observed_at),
+          })),
+        });
 
-          for (const rule of RULES) {
+        const dbRules = await loadRules();
+        const rules = dbRules.length > 0 ? dbRules : [DEFAULT_CPU_RULE]; // documented fallback
+
+        for (const sample of samples) {
+          for (const rule of rules) {
             if (rule.metric !== sample.metric) continue;
-            const evaluation = tracker.track('default', sample.resource_id, sample.value, rule);
+            const evaluation = tracker.track(rule.eventType, sample.resource_id, sample.value, rule);
             if (evaluation.fired && evaluation.eventType && evaluation.severity) {
               const fingerprint = composeFingerprint('tenant_host', {
                 tenantId: tenant_id,

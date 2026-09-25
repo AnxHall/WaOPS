@@ -16,6 +16,14 @@ export function hashAgentCredential(agentId: string, secret: string): string {
   return createHash('sha256').update(`${agentId}:${secret}`).digest('hex');
 }
 
+/**
+ * Enrollment tokens are stored hashed (sha256) at rest — a database leak does
+ * not leak usable enrollment tokens. Lookup happens by hash.
+ */
+export function hashEnrollmentToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 export function parseCredentialHeader(header: string | undefined): { agentId: string; secret: string } | null {
   if (!header?.startsWith('Bearer ')) return null;
   const raw = header.slice('Bearer '.length).trim();

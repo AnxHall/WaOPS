@@ -1,8 +1,39 @@
 import nodemailer, { type Transporter } from 'nodemailer';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getPrisma } from '@waops/db';
 import { getCorrelationLogger } from '@waops/observability';
 import type { EventEnvelopeV1 } from '@waops/contracts';
+
+const WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300;
+
+/**
+ * Reference receiver-side validation (§39): constant-time comparison of
+ * hmac(secret, `${timestamp}.${deliveryId}.${body}`) with timestamp tolerance.
+ * Exported for the receiver regression test.
+ */
+export function verifyWebhookSignature(input: {
+  secret: string;
+  signature: string;
+  timestamp: string;
+  deliveryId: string;
+  body: string;
+  nowSeconds?: number;
+}): { ok: boolean; reason?: 'bad_timestamp' | 'expired' | 'mismatch' } {
+  const ts = Number(input.timestamp);
+  if (!Number.isInteger(ts) || input.timestamp.length > 20) return { ok: false, reason: 'bad_timestamp' };
+  const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
+  if (Math.abs(now - ts) > WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS) {
+    return { ok: false, reason: 'expired' };
+  }
+  const expected = createHmac('sha256', input.secret)
+    .update(`${input.timestamp}.${input.deliveryId}.${input.body}`)
+    .digest('hex');
+  const provided = input.signature.replace(/^sha256=/, '');
+  if (provided.length !== expected.length) return { ok: false, reason: 'mismatch' };
+  return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(provided, 'hex'))
+    ? { ok: true }
+    : { ok: false, reason: 'mismatch' };
+}
 
 /**
  * WaNotify foundation: email (SMTP → Mailpit local) + generic webhook (HMAC
@@ -79,13 +110,21 @@ export class NotificationService {
       if (channel.provider === 'webhook') {
         const config = channel.configJson as { url: string; secret?: string };
         const payload = JSON.stringify({ incident_id: incidentId, event: envelope });
+        // Signature covers timestamp + delivery id + body (replay protection, §39).
+        // Receiver validates: hmac(secret, `${timestamp}.${deliveryId}.${body}`)
+        // with constant-time comparison and timestamp tolerance (5 min).
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const deliveryId = delivery.id;
+        const signed = `${timestamp}.${deliveryId}.${payload}`;
         const signature = config.secret
-          ? createHmac('sha256', config.secret).update(payload).digest('hex')
+          ? createHmac('sha256', config.secret).update(signed).digest('hex')
           : undefined;
         const res = await fetch(config.url, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
+            'x-waops-delivery': deliveryId,
+            'x-waops-timestamp': timestamp,
             ...(signature ? { 'x-waops-signature': `sha256=${signature}` } : {}),
           },
           body: payload,

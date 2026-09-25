@@ -32,23 +32,48 @@ const REDACT_PATHS = [
   'api_key',
   'enrollment_token',
   'agent_credential',
+  'agent_token',
+  'agent_secret',
   'smtp_password',
   'jwt_secret',
+  'webhook_secret',
+  'database_url',
+  'redis_url',
+  // One level of nesting covers the common shapes ({ auth: { token } },
+  // { req: { headers: { authorization } } } needs two — see deeper wildcards below).
   '*.password',
   '*.token',
   '*.secret',
   '*.credential',
+  '*.refresh_token',
+  '*.enrollment_token',
+  '*.agent_credential',
+  '*.*.password',
+  '*.*.token',
+  '*.*.secret',
+  '*.*.credential',
+  '*.*.authorization',
+  '*.*.refresh_token',
+  '*.*.cookie',
 ];
 
 let rootLogger: pino.Logger | null = null;
 
-export function createLogger(opts?: { level?: string; name?: string }): pino.Logger {
-  rootLogger = pino({
-    name: opts?.name ?? 'waops',
-    level: opts?.level ?? 'info',
-    redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
-    base: undefined,
-  });
+export function createLogger(opts?: {
+  level?: string;
+  name?: string;
+  /** Override the stdout sink (used by tests to capture output). */
+  destination?: pino.DestinationStream;
+}): pino.Logger {
+  rootLogger = pino(
+    {
+      name: opts?.name ?? 'waops',
+      level: opts?.level ?? 'info',
+      redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
+      base: undefined,
+    },
+    opts?.destination,
+  );
   return rootLogger;
 }
 

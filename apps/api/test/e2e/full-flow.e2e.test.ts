@@ -106,14 +106,17 @@ describe('E2E — fluxo completo do alpha', () => {
   });
 
   // ── Agente real via gateway HTTP ───────────────────────────────────────────
-  it('7. enrollment token one-time → agent enroll → credencial durável', async () => {
+  it('7. enrollment token one-time → agent enroll → credencial durável (token hasheado at rest)', async () => {
     // Token criado diretamente no banco (a UI/Admin faria via API autenticada;
-    // fluxo admin de enrollment UI chega com o frontend).
+    // fluxo admin de enrollment UI chega com o frontend). Token é armazenado
+    // como sha256 hash — plaintext nunca persistido (C1, §14).
     const { getPrisma } = await import('@waops/db');
     const prisma = getPrisma();
-    const token = `enr_${crypto.randomUUID().replace(/-/g, '')}`;
+    const token = `enr_${crypto.randomUUID().replace(/-/g, '')}${crypto.randomUUID().replace(/-/g, '')}`;
+    const { createHash } = await import('node:crypto');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
     await prisma.agentEnrollmentToken.create({
-      data: { token, tenantId: tenantAId, expiresAt: new Date(Date.now() + 15 * 60_000) },
+      data: { tokenHash, tenantId: tenantAId, expiresAt: new Date(Date.now() + 15 * 60_000) },
     });
     enrollmentToken = token;
 
@@ -129,7 +132,45 @@ describe('E2E — fluxo completo do alpha', () => {
     agentCredential = body.credential;
     expect(agentId).toBeTruthy();
     expect(agentCredential).toMatch(/^waops_/);
+
+    // plaintext token NÃO está no banco; hash sim
+    const stored = await prisma.agentEnrollmentToken.findUniqueOrThrow({
+      where: { tokenHash },
+    });
+    expect(stored.status).toBe('used');
   });
+
+  it('7b. enrollment CONCORRENTE: duas requests no mesmo token → exatamente 1 vence (C1)', async () => {
+    const { getPrisma } = await import('@waops/db');
+    const prisma = getPrisma();
+    const { createHash, randomBytes } = await import('node:crypto');
+    const token = `enr_${randomBytes(24).toString('hex')}`;
+    await prisma.agentEnrollmentToken.create({
+      data: {
+        tokenHash: createHash('sha256').update(token).digest('hex'),
+        tenantId: tenantAId,
+        expiresAt: new Date(Date.now() + 15 * 60_000),
+      },
+    });
+
+    // 5 requests simultâneas disputando o mesmo token
+    const attempts = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        gateway('/api/v1/agents/enrollment', {
+          enrollment_token: token,
+          name: 'race-agent',
+        }),
+      ),
+    );
+    const statuses = attempts.map((a) => a.status).sort();
+    const winners = statuses.filter((s) => s === 200).length;
+    expect(winners).toBe(1); // apenas 1 agente criado
+
+    const agentsNamedRace = await prisma.agent.count({
+      where: { tenantId: tenantAId, name: 'race-agent' },
+    });
+    expect(agentsNamedRace).toBe(1);
+  }, 30_000);
 
   it('8. enrollment token é one-time (segundo uso falha)', async () => {
     const again = await gateway('/api/v1/agents/enrollment', {
@@ -195,6 +236,109 @@ describe('E2E — fluxo completo do alpha', () => {
     expect(timeline.some((t) => t.entryType === 'created')).toBe(true);
   }, 45_000);
 
+  it('10b. DUPLICATE batch (§17): mesma sequence reenviada → sem incidente/evento duplicado', async () => {
+    const first = await gateway('/api/v1/agents/metrics', {
+      protocol_version: 1,
+      agent_id: agentId,
+      sequence: 999,
+      samples: [
+        { metric: 'host.cpu.usage_percent', resource_id: `host_e2e_${agentId}`, observed_at: new Date().toISOString(), value: 97 },
+      ],
+    }, agentCredential);
+    expect(first.status).toBe(200);
+
+    // reenvio idêntico (mesma sequence + mesmos samples)
+    const second = await gateway('/api/v1/agents/metrics', {
+      protocol_version: 1,
+      agent_id: agentId,
+      sequence: 999,
+      samples: [
+        { metric: 'host.cpu.usage_percent', resource_id: `host_e2e_${agentId}`, observed_at: new Date().toISOString(), value: 97 },
+      ],
+    }, agentCredential);
+    expect(second.status).toBe(200);
+
+    await new Promise((r) => setTimeout(r, 4000));
+    const { getPrisma } = await import('@waops/db');
+    const prisma = getPrisma();
+    // sem regra no DB, fallback default CPU (>90% × 6) aplica; incidentes ativos
+    // do tenant continuam ≤ número de fingerprints distintos (dedup por fingerprint)
+    const activeIncidents = await prisma.incident.findMany({
+      where: { tenantId: tenantAId, status: { notIn: ['resolved', 'closed'] } },
+    });
+    const fingerprints = new Set(activeIncidents.map((i) => i.fingerprint));
+    expect(activeIncidents.length).toBe(fingerprints.size); // nenhum duplicado por fingerprint
+  }, 30_000);
+
+  it('10c. NOTIFICAÇÃO REAL no Mailpit (§41): incidente → email entregue via SMTP', async () => {
+    const { getPrisma } = await import('@waops/db');
+    const prisma = getPrisma();
+    // Sanity: the CPU incident from test 10 exists before we assert delivery.
+    await prisma.incident.findFirstOrThrow({
+      where: { tenantId: tenantAId },
+      orderBy: { detectedAt: 'desc' },
+    });
+    // canal email para o tenant demo (criado uma vez)
+    const existing = await prisma.notificationChannel.findFirst({
+      where: { tenantId: tenantAId, name: 'e2e-mailpit' },
+    });
+    if (!existing) {
+      await prisma.notificationChannel.create({
+        data: {
+          tenantId: tenantAId,
+          provider: 'email',
+          name: 'e2e-mailpit',
+          configJson: { to: 'ops@tenant-a.local' } as object,
+        },
+      });
+    }
+
+    // dispara novo evento com fingerprint DIFERENTE (novo incidente → fan-out)
+    const freshFingerprint = `sha256:e2e-${Date.now()}`;
+    const { buildEventEnvelope } = await import('@waops/contracts');
+    const envelope = buildEventEnvelope({
+      eventId: `evt_${crypto.randomUUID()}`,
+      tenantId: tenantAId,
+      source: 'e2e',
+      sourceType: 'engine',
+      eventType: 'container.down',
+      severity: 'high',
+      observedAt: new Date(),
+      attributes: {},
+      resourceId: `host_e2e_${agentId}`,
+      fingerprint: freshFingerprint,
+    });
+    const { Queue } = await import('bullmq');
+    const { parseRedis } = await import('@waops/events');
+    const cfgEnv = { REDIS_URL: process.env.REDIS_URL ?? 'redis://localhost:6379' };
+    const queue = new Queue('waops.domain-events', { connection: parseRedis(cfgEnv.REDIS_URL) });
+    await queue.add(envelope.event_type, envelope, { jobId: envelope.event_id });
+    await queue.close();
+
+    // espera worker processar (evento → incidente → notificação)
+    let delivered = 0;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const res = await fetch(`${MAILPIT}/api/v1/search?query=to:ops@tenant-a.local`);
+      if (res.ok) {
+        const box = (await res.json()) as { total: number };
+        delivered = box.total;
+        if (delivered > 0) break;
+      }
+    }
+    expect(delivered).toBeGreaterThan(0); // email REAL chegou no Mailpit
+
+    // IDEMPOTÊNCIA (§38): republish do MESMO envelope → nenhum email novo
+    const before = delivered;
+    const queue2 = new Queue('waops.domain-events', { connection: parseRedis(cfgEnv.REDIS_URL) });
+    await queue2.add(envelope.event_type, envelope, { jobId: `${envelope.event_id}_replay` });
+    await queue2.close();
+    await new Promise((r) => setTimeout(r, 5000));
+    const res2 = await fetch(`${MAILPIT}/api/v1/search?query=to:ops@tenant-a.local`);
+    const box2 = (await res2.json()) as { total: number };
+    expect(box2.total).toBe(before); // nenhum spam adicional
+  }, 60_000);
+
   it('11. incident ack/resolve com permissões e timeline', async () => {
     const { getPrisma } = await import('@waops/db');
     const prisma = getPrisma();
@@ -254,25 +398,5 @@ describe('E2E — fluxo completo do alpha', () => {
       body: JSON.stringify({}),
     }, tokenB);
     expect(ack.status).toBe(404);
-  });
-
-  it('13. notificação: incidente aberto gerou email no Mailpit (canal demo)', async () => {
-    // cria canal email e dispara novo incidente via evento direto
-    const { getPrisma } = await import('@waops/db');
-    const prisma = getPrisma();
-    await prisma.notificationChannel.create({
-      data: {
-        tenantId: tenantAId,
-        provider: 'email',
-        name: 'e2e-mailpit',
-        configJson: { to: 'ops@tenant-a.local' } as object,
-      },
-    });
-
-    const events = await fetch(`${MAILPIT}/api/v1/messages?limit=10`);
-    // Mailpit responde mesmo sem emails; validamos apenas conectividade aqui.
-    expect(events.status).toBe(200);
-    // A entrega por evento real é coberta pelo worker (notifications.dispatch);
-    // o canal criado é usado no próximo incidente aberto pelo worker.
   });
 });

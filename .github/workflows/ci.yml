@@ -75,6 +75,9 @@ jobs:
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 20
+      mailpit:
+        image: axllent/mailpit:latest
+        ports: ['8025:8025', '1025:1025']
 
     steps:
       - uses: actions/checkout@v4
@@ -103,6 +106,12 @@ jobs:
           DATABASE_URL: postgresql://waops:waops@localhost:5432/waops?schema=public
           TRIAL_DAYS: '3'
 
+      - name: Seed idempotency (run twice, no duplicates)
+        run: pnpm --filter @waops/db run seed
+        env:
+          DATABASE_URL: postgresql://waops:waops@localhost:5432/waops?schema=public
+          TRIAL_DAYS: '3'
+
       - name: Start services
         run: |
           pnpm --filter @waops/api run start &
@@ -117,6 +126,7 @@ jobs:
           ENCRYPTION_MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           SMTP_HOST: localhost
           SMTP_PORT: '1025'
+          E2E_MAILPIT_URL: http://localhost:8025
 
       - name: E2E full flow
         run: pnpm --filter @waops/api run test:e2e
@@ -128,6 +138,7 @@ jobs:
           ENCRYPTION_MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           E2E_API_URL: http://localhost:3001
           E2E_GATEWAY_URL: http://localhost:3002
+          E2E_MAILPIT_URL: http://localhost:8025
 
       - name: Migration drift check
         run: pnpm --filter @waops/db exec prisma migrate diff --from-url "postgresql://waops:waops@localhost:5432/waops?schema=public" --to-schema-datamodel packages/db/prisma/schema.prisma --exit-code

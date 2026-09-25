@@ -38,9 +38,17 @@ async function main(): Promise<void> {
         `SELECT create_hypertable('metric_samples', 'observed_at', if_not_exists => TRUE, migrate_data => TRUE);`,
       )
       .catch(() => console.warn('[seed] hypertable skipped (already exists or extension missing)'));
+    // Retention baseline (ADR-009): configurable default for alpha; per-plan
+    // retention arrives with billing (usage metering of retention_days).
+    const retentionDays = Number(process.env.METRIC_RETENTION_DAYS ?? 30);
     await db
       .query(
-        `SELECT add_retention_policy('metric_samples', INTERVAL '30 days', if_not_exists => TRUE);`,
+        `SELECT remove_retention_policy('metric_samples', IF_EXISTS => TRUE);`,
+      )
+      .catch(() => undefined);
+    await db
+      .query(
+        `SELECT add_retention_policy('metric_samples', INTERVAL '${retentionDays} days', if_not_exists => TRUE);`,
       )
       .catch(() => console.warn('[seed] retention policy skipped'));
 
