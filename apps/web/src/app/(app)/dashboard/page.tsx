@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useRealtime } from '@/lib/use-realtime';
 
 interface Incident {
   id: string;
@@ -38,27 +39,66 @@ export default function DashboardPage() {
   const [hosts, setHosts] = useState<Host[] | null>(null);
   const [agentsOnline, setAgentsOnline] = useState<number | null>(null); // GAP-RM-006 closed
   const [error, setError] = useState<string | null>(null);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [i, h, a] = await Promise.all([
+        api<Incident[]>('/api/v1/incidents'),
+        api<Host[]>('/api/v1/hosts'),
+        api<{ status: string }[]>('/api/v1/agents').catch(() => null),
+      ]);
+      setIncidents(i);
+      setHosts(h);
+      if (a) setAgentsOnline(a.filter((x) => x.status === 'online').length);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao carregar');
+    }
+  }, []);
 
   useEffect(() => {
-    Promise.all([
-      api<Incident[]>('/api/v1/incidents'),
-      api<Host[]>('/api/v1/hosts'),
-      api<{ status: string }[]>('/api/v1/agents').catch(() => null),
-    ])
-      .then(([i, h, a]) => {
-        setIncidents(i);
-        setHosts(h);
-        if (a) setAgentsOnline(a.filter((x) => x.status === 'online').length);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Erro ao carregar'));
-  }, []);
+    void load();
+    // Safety-net poll: SSE carries freshness; this bounds staleness to 30s if
+    // an event is ever missed (stream is at-least-once, not exactly-once).
+    const poll = setInterval(() => void load(), 30_000);
+    return () => {
+      clearInterval(poll);
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    };
+  }, [load]);
+
+  // ADR-010: realtime replaces aggressive polling — incident/agent events
+  // trigger a debounced refetch of the affected read models.
+  const scheduleReload = useCallback(() => {
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => void load(), 400);
+  }, [load]);
+
+  const realtimeStatus = useRealtime({
+    'incident.created': scheduleReload,
+    'incident.updated': scheduleReload,
+    'agent.heartbeat': scheduleReload,
+    'agent.revoked': scheduleReload,
+  });
+
+  const liveBadge =
+    realtimeStatus === 'open'
+      ? { cls: 'badge ok', label: 'live' }
+      : realtimeStatus === 'reconnecting' || realtimeStatus === 'connecting'
+        ? { cls: 'badge warning', label: 'reconectando…' }
+        : realtimeStatus === 'unauthorized'
+          ? { cls: 'badge critical', label: 'sessão expirada' }
+          : { cls: 'badge neutral', label: 'offline' };
 
   const openIncidents = incidents?.filter((i) => i.status !== 'resolved' && i.status !== 'closed') ?? [];
   const onlineHosts = hosts?.filter((h) => h.status === 'online') ?? [];
 
   return (
     <>
-      <h1 className="page-title">Dashboard</h1>
+      <h1 className="page-title">
+        Dashboard{' '}<span className={liveBadge.cls} title={`realtime: ${realtimeStatus}`}>{liveBadge.label}</span>
+      </h1>
 
       {error && (
         <div className="card" role="alert" style={{ marginBottom: 16, color: 'var(--status-critical)' }}>

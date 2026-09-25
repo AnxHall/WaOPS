@@ -36,6 +36,45 @@ function rateLimited(agentId: string, limit = 120, windowMs = 60_000): boolean {
 
 const app = Fastify({ logger: false, bodyLimit: 5 * 1024 * 1024 });
 
+/**
+ * HM05 ADR-010 — agent realtime events (heartbeat/revocation) → tenant SSE.
+ * Fire-and-forget: realtime failure never blocks the ingest path.
+ */
+let realtimeRedis: import('ioredis').Redis | null = null;
+async function publishAgentEvent(tenantId: string, type: string, payload: Record<string, unknown>): Promise<void> {
+  try {
+    if (!realtimeRedis) {
+      const Redis = (await import('ioredis')).default;
+      realtimeRedis = new Redis(config.env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false });
+      realtimeRedis.on('error', () => undefined);
+      await realtimeRedis.connect();
+    }
+    // Monotonic per-tenant id (same sse:seq counter as API/worker) so
+    // Last-Event-ID replay keeps a total order across ALL producers.
+    const id = await realtimeRedis.incr(`sse:seq:${tenantId}`);
+    const frame = JSON.stringify({
+      id: String(id),
+      channel: 'agents',
+      type,
+      occurred_at: new Date().toISOString(),
+      payload,
+    });
+    // Publish AND retain (same wire contract as the API RealtimeBroker) so the
+    // event replays for clients reconnecting with Last-Event-ID.
+    await Promise.all([
+      realtimeRedis.publish(`tenant:${tenantId}:agents`, frame),
+      realtimeRedis
+        .multi()
+        .lpush(`sse:retained:tenant:${tenantId}:agents`, frame)
+        .ltrim(`sse:retained:tenant:${tenantId}:agents`, 0, 199)
+        .expire(`sse:retained:tenant:${tenantId}:agents`, 3600)
+        .exec(),
+    ]);
+  } catch {
+    // best effort by contract
+  }
+}
+
 app.addHook('onRequest', async (req, reply) => {
   const requestId = `req_${randomUUID()}`;
   reply.header('x-request-id', requestId);
@@ -146,6 +185,7 @@ app.post('/api/v1/agents/heartbeat', async (req, reply) => {
       ...(typeof machineId === 'string' && machineId.length >= 8 && machineId.length <= 128 ? { machineId } : {}),
     },
   });
+  void publishAgentEvent(identity.tenantId, 'agent.heartbeat', { agent_id: identity.agentId, name: parsed.data.agent_id });
   return reply.send({ protocol_version: 1, ack: parsed.data.agent_id });
 });
 
