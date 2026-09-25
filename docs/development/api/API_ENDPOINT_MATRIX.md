@@ -1,9 +1,18 @@
 # API Endpoint Matrix — Alpha (AS-BUILT)
 
-> Fotografia do código. Atualizada em `feature/hard-mission-03-wamonitor` (drift rule de
-> `api-conventions.md`). Cada linha verificada no controller/handler e nos testes.
+> Fotografia do código. Atualizada em `feature/hard-mission-05-wasupport-realtime-supply` (drift rule de
+> `api-conventions.md`; inclui dívida documental da HM04). Cada linha verificada no controller/handler e nos testes.
 > Permissões conforme `contracts/permissions/permissions.v1.yaml`. Envelope de erro:
 > `{ error: { code, message } }` (ver `API_BASELINE_ALPHA.md`).
+
+## Rate limiting (HARD MISSION 05)
+
+Token bucket **distribuído** por `tenant+rota` (Redis, script Lua atômico; refill contínuo `capacity/windowMs`).
+Chave do bucket: `rl:<classe>:<tenantId>` (usuários autenticados) ou `rl:<classe>:<IP>` (pré-auth). Classes: `auth` 10/min
+(login/signup/refresh), `api` 120/min (superfície `/api/v1/*`), `realtime` 30/min (conexões de stream). Respostas incluem
+`RateLimit-Limit`/`RateLimit-Remaining`/`RateLimit-Reset`; estouro → **429** `rate_limited` + `Retry-After`. Redis
+indisponível → **fail-open** (default; `RATE_LIMIT_FAILURE_MODE=closed` endurece para 503 `dependency_unavailable`).
+E2E adversarial: `apps/api/test/e2e/hm05.e2e.test.ts`; unit: `apps/api/test/rate-limit.test.ts`.
 
 ## apps/api (NestJS, porta 3001)
 
@@ -29,6 +38,15 @@
 | GET | `/api/v1/agents` | Listar agentes do tenant | User JWT | `agents.read` | JWT/TenantContext | — | — | `Agent[]` (≤100, com machineId/hostId) | 401; 403 | — | Agents UI | E2E HM03 6 |
 | POST | `/api/v1/agents/enrollment-tokens` | Emitir token one-time (SHA-256 at rest, TTL ≤60min) | User JWT | `agents.enroll` | JWT/TenantContext | — | `{name?, ttl_minutes?}` | `201 {token (uma única vez), token_id, expires_at, install_hint}` + audit | 400; 401; 403 | token one-time no claim | Agents UI | E2E HM03 1/2 |
 | POST | `/api/v1/agents/:id/revoke` | Revogar credencial do agente | User JWT | `agents.revoke` | JWT/TenantContext | — | — | `200 {id, status:"revoked"}` + audit; heartbeats/metrics passam a 401 | 401; 403; 404 | — | Agents UI | E2E HM03 8 |
+| GET | `/api/v1/hosts/:id/metrics/long` | Séries longas (7–90d) do aggregate contínuo `metric_samples_5m` | User JWT | `hosts.read` | JWT/TenantContext | — | `?days` (1..90, default 7) | `{host_id, from, to, window_days, source:"metric_samples_5m", series}` | 400; 401; 403; 404 | — | Host Detail (janelas longas) | E2E HM04 |
+| GET | `/api/v1/realtime/stream` | Stream SSE dos canais `tenant:{tid}:incidents\|agents` (heartbeat 15s; replay via `Last-Event-ID`) | User JWT | — (só JWT) | **JWT — nunca query param** (ADR-010) | — | `?channels=incidents,agents` (≤2; default ambos) | `text/event-stream` frames `id:`/`event:`/`data:` (envelope `{id, channel, type, occurred_at, payload}`) | **401** sem token; 400 channels inválidos | dedup client-side por SSE id (at-least-once) | Web dashboard (lib/sse.ts) | E2E HM05 (fan-out real, replay, isolamento) |
+| GET | `/api/v1/tickets` | Listar tickets do tenant (WaSupport) | User JWT | `tickets.read` | JWT/TenantContext | — | — | `Ticket[]` (≤100, com último comentário) | 401; 403 | — | Suporte (futura UI) | E2E HM05 |
+| POST | `/api/v1/tickets` | Criar ticket (número sequencial per-tenant via `support_sequences`) | User JWT | `tickets.create` | JWT/TenantContext | — | `{title, description, priority?, labels?, incident_id?}` | `201 Ticket` + audit + realtime `ticket.created` | 400; 401; 403 | número per-tenant único (unique (tenant_id, number)) | Suporte | E2E HM05 |
+| GET | `/api/v1/tickets/:id` | Detalhe do ticket + comentários | User JWT | `tickets.read` | JWT/TenantContext | — | — | `Ticket & {comments[]}` | 401; 403; **404** cross-tenant | — | Suporte | E2E HM05 |
+| PATCH | `/api/v1/tickets/:id` | Editar title/description/priority/labels | User JWT | `tickets.create` | JWT/TenantContext | — | qualquer subconjunto dos campos | `200 Ticket` + audit | 400; 401; 403; 404 | — | Suporte | E2E HM05 |
+| POST | `/api/v1/tickets/:id/comments` | Adicionar comentário | User JWT | `tickets.create` | JWT/TenantContext | — | `{body}` ≤5000 | `201 Comment` + audit | 400; 401; 403; 404 | — | Suporte | E2E HM05 |
+| POST | `/api/v1/tickets/:id/assign` | Atribuir/desatribuir responsável | User JWT | `tickets.assign` | JWT/TenantContext | — | `{assignee_id: uuid\|null}` | `201 Ticket` + audit | 400 assignee sem membership ativa; 401; 403; 404 | — | Suporte | E2E HM05 |
+| POST | `/api/v1/tickets/:id/transition` | Transição de estado (máquina: `open→in_progress→resolved→closed` + reopens; terminal = closed) | User JWT | `tickets.resolve` | JWT/TenantContext | — | `{status, note?}` | `201 Ticket` (resolvedAt set/clear) + comentário de status + audit + realtime `ticket.transitioned` | 400; **409** transição ilegal; 401; 403; 404 | — | Suporte | E2E HM05 |
 | GET | `/healthz` | Liveness | Public | — | — | — | — | `{status:"ok"}` | — | — | Ops/Compose | E2E, resiliência |
 | GET | `/readyz` | Readiness (postgres/redis) | Public | — | — | — | — | `{postgres:"ok\|unavailable", redis:"ok\|unavailable"}` | — | — | Ops/Compose | MISSÃO 02 §20/21 |
 
@@ -43,5 +61,6 @@
 
 ## Não implementado (registrado para não inventar)
 
-`GET /entitlements`, `GET /usage`, SSE realtime. Gaps de read-model fechados na HARD MISSION 03:
-ver `READ_MODEL_GAPS.md`. Ver `READ_MODEL_GAPS.md` para o estado restante (GAP-RM-006).
+`GET /entitlements`, `GET /usage`. SSE realtime **implementado na HARD MISSION 05** (`/api/v1/realtime/stream`, ADR-010);
+WaSupport foundation (tickets CRUD + transitions) implementado — UI de tickets ainda não existe no web.
+Gaps de read-model fechados na HARD MISSION 03: ver `READ_MODEL_GAPS.md` (resta GAP-RM-006).

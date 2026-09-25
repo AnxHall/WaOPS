@@ -1,6 +1,9 @@
 # Frontend Capability Matrix — Alpha (AS-BUILT)
 
-> Visão objetiva do frontend no momento do congelamento (HARD MISSION 02.5).
+> Visão objetiva do frontend. Atualizada em `feature/hard-mission-05-wasupport-realtime-supply` (HARD MISSION 05).
+> Atualizações HM04: agentes no dashboard reais (GAP-RM-006 fechado).
+> Atualizações HM05: dashboard com **realtime SSE** (ADR-010) — client `lib/sse.ts` + hook `use-realtime.ts`;
+> Evidências: testes nomeados (`apps/web/test/*` incl. `sse.test.ts`), `API_ENDPOINT_MATRIX.md`,
 > Evidências: testes nomeados (`apps/web/test/*`), `API_ENDPOINT_MATRIX.md`,
 > `API_READ_MODELS.md`, `READ_MODEL_GAPS.md`. Coluna "API real": ✅ todos os dados
 > essenciais com read-model real · **Partial** parte disponível · ❌ ausente —
@@ -9,11 +12,11 @@
 | Tela            | API real | Loading | Empty | Error | Offline/Stale | RBAC | Responsive | A11y |
 |-----------------|----------|---------|-------|-------|---------------|------|------------|------|
 | Login           | ✅       | ✅¹     | N/A   | ✅    | —             | —    | ✅         | ✅   |
-| Dashboard       | Partial (séries = GAP-RM-004; agentes ✅ desde HM04) | ✅ | ✅ | ✅ | —² | ✅ | ✅ | ✅ |
+| Dashboard       | ✅ (agentes ✅ desde HM04; GAP-RM-004 fechado na HM03; **realtime SSE desde HM05**) | ✅ | ✅ | ✅ | ✅⁵ | ✅ | ✅ | ✅ |
 | Hosts           | ✅       | ✅      | ✅    | ✅    | —³            | ✅   | ✅         | ✅   |
 | Host Detail     | ✅ (charts/filesystems/containers reais desde HM03) | ✅ | N/A (404 tratado) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Incidents       | ✅       | ✅      | ✅    | ✅    | —²            | ✅   | ✅         | ✅   |
-| Incident Detail | ✅ (recurso + chart CPU desde HM03/HM04) | ✅ | N/A (404 tratado) | ✅ | —⁴ | ✅ | ✅ | ✅ |
+| Incident Detail | ✅ (recurso + chart CPU desde HM03/HM04) | ✅ | N/A (404 tratado) | ✅ | —⁴ (dashboard cobre updates via SSE) | ✅ | ✅ | ✅ |
 | Agents          | ✅ (list/token/revoke reais desde HM03) | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ |
 
 ## Evidências por coluna
@@ -26,7 +29,11 @@
 - **Error:** `ErrorState` com "Tentar novamente" em todas as telas; 404 diferenciado de erro de
   rede e de permission denied (Host/Incident detail); `role="alert"`; detalhe técnico em `<details>`.
 - **Offline/Stale:** `StaleBanner` + lógica `isStale()` (testes em `status.test.ts`);
-  Host Detail exibe banner quando agente não está `online`.
+  Host Detail exibe banner quando agente não está `online`. **HM05:** dashboard com badge de
+  conexão realtime (`live` / `reconectando` / `sessão expirada` / `offline`) e refresh automático
+  via eventos SSE (`incident.created/updated`, `agent.heartbeat/revoked`) com debounce 400ms;
+  `lib/sse.ts` reconecta com backoff exponencial (cap 15s) + full jitter e dedup por id;
+  poll de segurança 30s cobre eventos perdidos (at-least-once).
 - **RBAC:** `SessionProvider`/`useSession().can()` (evidência: `permission-rendering.test.tsx`,
   dois perfis); ações ack/resolve gated por `incidents.ack`/`incidents.resolve`; detail de host
   trata 401/403 como `PermissionDeniedState`. Backend continua a authorization boundary.
@@ -43,3 +50,6 @@
    a lógica e o componente existem e são testados.
 3. Hosts list não consulta métricas (nada a ficar stale) — stale aplica-se ao detail.
 4. Incident detail é fetch-on-load; timeline Append-only (designer.md §4.10).
+5. **HM05:** dashboard atualiza em realtime via SSE (`/api/v1/realtime/stream`); quando o stream
+   cai, o badge muda para "reconectando" e o client refaz o fetch com backoff — dados nunca
+   ficam stale silenciosamente; 401/403 do stream → estado "sessão expirada" sem retry storm.
