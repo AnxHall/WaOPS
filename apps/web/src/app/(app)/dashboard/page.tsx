@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useSession } from '@/lib/permissions';
 import { useRealtime } from '@/lib/use-realtime';
 
 interface Incident {
@@ -11,6 +12,11 @@ interface Incident {
   severity: string;
   status: string;
   detectedAt: string;
+}
+
+interface RateLimitStats {
+  window_seconds: number;
+  classes: { routeClass: string; windowStart: string; limited: number }[];
 }
 
 interface Host {
@@ -35,22 +41,27 @@ function statusBadgeClass(status: string): string {
 }
 
 export default function DashboardPage() {
+  const { can } = useSession();
   const [incidents, setIncidents] = useState<Incident[] | null>(null);
   const [hosts, setHosts] = useState<Host[] | null>(null);
   const [agentsOnline, setAgentsOnline] = useState<number | null>(null); // GAP-RM-006 closed
+  const [rlStats, setRlStats] = useState<RateLimitStats | null>(null); // 429/min (HM05 follow-up)
   const [error, setError] = useState<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [i, h, a] = await Promise.all([
+      const [i, h, a, rl] = await Promise.all([
         api<Incident[]>('/api/v1/incidents'),
         api<Host[]>('/api/v1/hosts'),
         api<{ status: string }[]>('/api/v1/agents').catch(() => null),
+        // Métrica de rate limiting (Redis como fonte) — opcional: falha/403 não derruba o dashboard.
+        api<RateLimitStats>('/api/v1/rate-limits').catch(() => null),
       ]);
       setIncidents(i);
       setHosts(h);
       if (a) setAgentsOnline(a.filter((x) => x.status === 'online').length);
+      setRlStats(rl);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar');
@@ -132,6 +143,40 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid cols-2">
+        {can('tenants.read') && (
+          <div className="card">
+            <h2 className="card-title">Rate limiting — 429/min (Redis)</h2>
+            {rlStats === null ? (
+              <div className="skeleton" style={{ height: 96 }} />
+            ) : (
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Classe de rota</th>
+                    <th>Limitados (janela 60s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rlStats.classes.map((c) => (
+                    <tr key={c.routeClass}>
+                      <td data-label="Classe">{c.routeClass}</td>
+                      <td data-label="Limitados">
+                        {c.limited > 0 ? (
+                          <span className="badge warning">▲ {c.limited}</span>
+                        ) : (
+                          <span className="muted">0</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+              Fonte: contadores Redis do token bucket (auth/api/realtime).
+            </p>
+          </div>
+        )}
         <div className="card">
           <h2 className="card-title">Incidentes recentes</h2>
           {incidents === null ? (

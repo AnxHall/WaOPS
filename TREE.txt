@@ -35,7 +35,8 @@ apps/
     src/
       main.ts  app.module.ts  errors.ts  correlation.middleware.ts
       http-exception.filter.ts
-      middleware/  rate-limit.middleware.ts
+      middleware/  rate-limit.middleware.ts  rate-limit.stats.ts
+                   rate-limit.controller.ts
       realtime/  realtime.module.ts  realtime.controller.ts
                  realtime.broker.ts  realtime.publisher.ts
       support/  support.module.ts  tickets.controller.ts
@@ -60,6 +61,7 @@ apps/
     test/ rules.test.ts  dedup.test.ts  webhook-signature.test.ts
   collector-gateway/
     src/  main.ts  auth.ts
+    scripts/  load-gateway.mjs
   web/
     src/  app/layout.tsx  app/page.tsx  app/globals.css
           app/login/page.tsx

@@ -4,6 +4,7 @@
 > Atualizações HM04: agentes no dashboard reais (GAP-RM-006 fechado).
 > Atualizações HM05: dashboard com **realtime SSE** (ADR-010) — client `lib/sse.ts` + hook `use-realtime.ts`;
 > HM05 follow-up: tela de Tickets (lista + detalhe + transições) com realtime;
+> card **429/min por classe de rota** no dashboard (fonte Redis, `tenants.read` gate, fail-soft).
 > Evidências: testes nomeados (`apps/web/test/*` incl. `sse.test.ts`), `API_ENDPOINT_MATRIX.md`,
 > Evidências: testes nomeados (`apps/web/test/*`), `API_ENDPOINT_MATRIX.md`,
 > `API_READ_MODELS.md`, `READ_MODEL_GAPS.md`. Coluna "API real": ✅ todos os dados
@@ -13,7 +14,7 @@
 | Tela            | API real | Loading | Empty | Error | Offline/Stale | RBAC | Responsive | A11y |
 |-----------------|----------|---------|-------|-------|---------------|------|------------|------|
 | Login           | ✅       | ✅¹     | N/A   | ✅    | —             | —    | ✅         | ✅   |
-| Dashboard       | ✅ (agentes ✅ desde HM04; GAP-RM-004 fechado na HM03; **realtime SSE desde HM05**) | ✅ | ✅ | ✅ | ✅⁵ | ✅ | ✅ | ✅ |
+| Dashboard       | ✅ (agentes ✅ desde HM04; GAP-RM-004 fechado na HM03; **realtime SSE desde HM05**; card 429/min desde follow-up) | ✅ | ✅ | ✅ | ✅⁵ | ✅ | ✅ | ✅ |
 | Hosts           | ✅       | ✅      | ✅    | ✅    | —³            | ✅   | ✅         | ✅   |
 | Host Detail     | ✅ (charts/filesystems/containers reais desde HM03) | ✅ | N/A (404 tratado) | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Incidents       | ✅       | ✅      | ✅    | ✅    | —²            | ✅   | ✅         | ✅   |

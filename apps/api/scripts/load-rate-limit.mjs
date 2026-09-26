@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable no-console -- CLI: console é o mecanismo de saída da suíte */
 /**
  * HARD MISSION 05 — load/adversarial suite for the distributed Redis rate limiter.
  *

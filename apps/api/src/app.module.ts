@@ -1,5 +1,7 @@
 import { Module, type MiddlewareConsumer, type NestModule } from '@nestjs/common';
 import { makeRateLimitMiddleware, RATE_LIMIT_PRESETS } from './middleware/rate-limit.middleware.js';
+import { RateLimitStatsService } from './middleware/rate-limit.stats.js';
+import { RateLimitStatsController } from './middleware/rate-limit.controller.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
 import { RealtimeController } from './realtime/realtime.controller.js';
 import { SupportModule } from './support/support.module.js';
@@ -21,10 +23,11 @@ import { AgentsController } from './agents/agents.controller.js';
 
 @Module({
   imports: [AuthModule, RealtimeModule, SupportModule],
-  controllers: [AuthController, HealthController, HostsController, IncidentsController, MetricsController, AgentsController, RealtimeController, TicketsController],
+  controllers: [AuthController, HealthController, HostsController, IncidentsController, MetricsController, AgentsController, RealtimeController, TicketsController, RateLimitStatsController],
   providers: [
     TokenService,
     AuditService,
+    RateLimitStatsService,
     Reflector,
     { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
