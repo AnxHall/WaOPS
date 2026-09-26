@@ -55,7 +55,9 @@ export async function countRateLimited(routeClass: string): Promise<void> {
     await redis.connect();
     const key = `rl:stats:429:${routeClass}:${Math.floor(Date.now() / 60_000)}`;
     try {
-      await redis.multi().incr(key).expire(key, 120).exec();
+      // TTL 1000s (~16.7min): retém a janela completa de 15 min exposta em
+      // GET /api/v1/rate-limits/history (antes 120s mantinha só 2 buckets).
+      await redis.multi().incr(key).expire(key, 1000).exec();
     } finally {
       redis.disconnect();
     }

@@ -3,6 +3,7 @@ WaOPS — repository tree (alpha, tag v0.5.0-alpha)
 .github/workflows/ci.yml
 .github/dependabot.yml
 scripts/  audit-gate.mjs  generate-sbom.mjs  audit-allowlist.txt
+          probe-rate-limit-closed.mjs
 scripts/  kill-waops-node.ps1
 AGENTS.md
 BOOTSTRAP_WORKER.md
@@ -72,10 +73,11 @@ apps/
           app/(app)/tickets/page.tsx  app/(app)/tickets/[id]/page.tsx
           app/(app)/hosts/page.tsx  app/(app)/hosts/[id]/page.tsx
           components/states.tsx  components/MetricChartCard.tsx
+          components/RateLimitSparkline.tsx
           lib/api.ts  lib/status.ts  lib/permissions.tsx
           lib/sse.ts  lib/use-realtime.ts  lib/tickets.ts
     test/ status.test.ts  permission-rendering.test.tsx  incident-detail.test.tsx
-          sse.test.ts  tickets.test.tsx
+          sse.test.ts  tickets.test.tsx  sparkline.test.tsx
 agent/
   go.mod  go.sum
   cmd/waagent/main.go
