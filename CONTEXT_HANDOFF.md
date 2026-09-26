@@ -86,7 +86,7 @@ Débitos restantes da fundação (cada um em missão dedicada):
 2. ~~Dependency/SBOM/security scanning externo.~~ **CONCLUÍDA — HARD MISSION 05**: SBOM CycloneDX 1.6 (`scripts/generate-sbom.mjs`), audit gate **exit 0 com zero findings sem allowlist** (fixes reais: overrides `postcss`/`deepmerge-ts` no `pnpm-workspace.yaml` — pnpm 11 lê overrides do workspace.yaml, não do package.json — e vitest 3.2.7→5.0.1 em 12 workspaces), Dependabot (`dependabot.yml`) + job supply-chain no CI.
 3. ~~WaAgent live resilience — HARD MISSION 02.6~~ **CONCLUÍDA — PASS** (tag `v0.2.0-alpha`): buffer offline, reconnect com backoff+jitter e saturation/drop policy provados ao vivo (loopback E2E).
 4. ~~HARD MISSION 03 — WaMonitor~~ **CONCLUÍDA — PASS** (tag `v0.3.0-alpha-wamonitor`): identity bridge (Host por machineId + Agent.hostId + inventário de containers no ingest), séries com `date_bin`, filesystems por mount, containers, agents admin (list/token/revoke), resolução de recurso nos incidentes e charts reais. GAP-RM-006 **fechado na HARD MISSION 04** — registry 8/8 fechado.
-5. **HARD MISSION 05 — WaSupport + realtime SSE + supply-chain** (branch `feature/hard-mission-05-wasupport-realtime-supply`, tag alvo `v0.5.0-alpha`): rate limiting distribuído Redis (token bucket por tenant+rota, unit 10/10), realtime SSE ADR-010 end-to-end (API stream + client web com reconexão, E2E 15/15), supply-chain (SBOM + audit gate + Dependabot + CI), WaSupport foundation (schema tickets, endpoints CRUD, tests) — **E2E suíte completa 40/40, todos os gates verdes**.
+5. **HARD MISSION 05 — WaSupport + realtime SSE + supply-chain** (branch `feature/hard-mission-05-wasupport-realtime-supply`, tag alvo `v0.5.0-alpha`): rate limiting distribuído Redis (token bucket por tenant+rota, unit 10/10), realtime SSE ADR-010 end-to-end (API stream + client web com reconexão, E2E 15/15), supply-chain (SBOM + audit gate + Dependabot + CI), WaSupport foundation (schema tickets, endpoints CRUD, tests) — **E2E suíte completa 40/40, todos os gates verdes**. Follow-up pós-tag (`feature/hm05-followups`): UI de tickets no web (lista + detalhe + transições + realtime), suíte de carga do rate limiter 11/11 (`apps/api/scripts/load-rate-limit.mjs`), convenção de portas de teste **4000/5000** (`docs/environments/LOCAL_DEVELOPMENT.md`).
 
 ## Design
 
@@ -152,7 +152,9 @@ Agentes de desenvolvimento não devem possuir write irrestrito em Docker, banco,
 
 ## Próxima ação de qualquer worker
 
-Missão corrente: **HARD MISSION 05 — WaSupport + realtime SSE + supply-chain** (rate limiting Redis por tenant+rota; SSE ADR-010 no dashboard substituindo polling; SBOM/audit gate/Dependabot/CI; WaSupport tickets foundation). Branch `feature/hard-mission-05-wasupport-realtime-supply` a partir da `main`; ao PASS: merge `--no-ff` na `main` + tag **`v0.5.0-alpha`** + push. Não trabalhar diretamente na `main`.
+**HARD MISSION 05 PASS** (tag `v0.5.0-alpha` na `main`). Follow-up pós-tag em andamento na branch `feature/hm05-followups`: UI de tickets (lista + detalhe + transições, realtime), suíte de carga do rate limiter (11/11), convenção de portas de teste 4000/5000 documentada. Ao concluir: merge `--no-ff` na `main`. Não trabalhar diretamente na `main`.
+
+**Portas de teste: usar 4000 (api/web) e 5000 (gateway) — nunca 3000/3001/3002** (outras iniciativas rodam na mesma máquina). Ver `docs/environments/LOCAL_DEVELOPMENT.md`.
 
 1. ler `AGENTS.md`;
 2. ler este arquivo;

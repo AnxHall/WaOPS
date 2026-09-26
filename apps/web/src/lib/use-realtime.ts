@@ -31,7 +31,6 @@ export function useRealtime(handlers: Record<string, (e: RealtimeEvent) => void>
       client.stop();
     };
     // stream lifecycle is bound to mount; handlers are read via ref
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return status;
