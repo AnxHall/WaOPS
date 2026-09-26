@@ -41,6 +41,29 @@ export const RATE_LIMIT_PRESETS: Record<'auth' | 'api' | 'realtime', Omit<RateLi
   realtime: { capacity: 30, windowMs: 60_000, message: 'too many stream (re)connections' },
 };
 
+/** 429s (HM05 follow-up): fixed 60s window counter per route class, Redis-backed
+ * so a horizontally scaled API aggregates. Fail-open: counting never blocks. */
+export async function countRateLimited(routeClass: string): Promise<void> {
+  try {
+    const redis = new Redis(loadConfig().env.REDIS_URL, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      enableOfflineQueue: false,
+      connectTimeout: 1000,
+    });
+    redis.on('error', () => undefined);
+    await redis.connect();
+    const key = `rl:stats:429:${routeClass}:${Math.floor(Date.now() / 60_000)}`;
+    try {
+      await redis.multi().incr(key).expire(key, 120).exec();
+    } finally {
+      redis.disconnect();
+    }
+  } catch {
+    // observability is best-effort; the limiter's decision is unaffected
+  }
+}
+
 /** Lua: token bucket. Keys: [bucket]; args: [capacity, refill_per_ms, now_ms, cost]. */
 export const TOKEN_BUCKET_LUA = `
 local capacity = tonumber(ARGV[1])
@@ -152,6 +175,7 @@ export class RateLimitMiddleware implements NestMiddleware {
     res.setHeader('RateLimit-Reset', Math.max(0, Math.ceil(resetMs / 1000)));
     if (!allowed) {
       res.setHeader('Retry-After', Math.max(1, Math.ceil(resetMs / 1000)));
+      void countRateLimited(this.options.routeClass); // fire-and-forget (best-effort)
       throw new ApiError('rate_limited', this.options.message ?? 'too many requests', 429, {
         route_class: this.options.routeClass,
         retry_after_seconds: Math.max(1, Math.ceil(resetMs / 1000)),

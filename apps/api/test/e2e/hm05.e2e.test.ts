@@ -7,7 +7,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
  *   tenant-scoped fan-out of REAL producer events (gateway heartbeat, worker
  *   incident pipeline, tickets), cross-tenant isolation, Last-Event-ID replay;
  * - WaSupport: tickets CRUD + per-tenant numbering + state machine + 404
- *   isolation across tenants;
+ *   isolation across tenants; follow-up: fluxo criar → transicionar → comentar
+ *   com dois perfis RBAC (operator vs support_agent, 403 vs allow);
  * - rate limit (adversarial): auth hammer → 429 `rate_limited` with
  *   RateLimit-* and Retry-After headers; api-class burst exhausts the TENANT
  *   bucket while another tenant keeps working.
@@ -380,6 +381,100 @@ describe('HM05 — WaSupport tickets', () => {
     const patchFromB = await api(tokenB, 'PATCH', `/api/v1/tickets/${id}`, { title: 'hijack' });
     expect(patchFromB.status).toBe(404);
   });
+});
+
+// ---------------------------------------------------------------------------
+// WaSupport × RBAC (HM05 follow-up): dois perfis com permissões de tickets
+// distintas — operator (read+create, sem resolve/assign) vs support_agent
+// (full: read/create/assign/resolve). O segundo usuário é criado por SQL
+// (argon2 via @node-rs/argon2, mesmos ARGON2_OPTS do auth.controller) e
+// recebe membership no tenant A com o role de sistema do seed.
+// ---------------------------------------------------------------------------
+describe('HM05 follow-up — tickets × RBAC (operator vs support_agent)', () => {
+  async function loginAs(email: string): Promise<string> {
+    const res = await fetch(`${API}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password: PASSWORD }),
+    });
+    expect(res.status).toBe(200);
+    return (res.headers.get('x-access-token') ?? '') as string;
+  }
+
+  it('create → transition → comment with two RBAC profiles', async () => {
+    // ── Arrange: operator (sem tickets.resolve/assign) e support_agent (full) ──
+    const { getPrisma } = await import('@waops/db');
+    const { hash } = await import('@node-rs/argon2');
+    const prisma = getPrisma();
+    const roleRows = await prisma.$queryRaw<{ id: string; name: string }[]>`
+      SELECT id, name FROM roles WHERE tenant_id IS NULL AND name IN ('operator','support_agent')`;
+    const roleId = Object.fromEntries(roleRows.map((r) => [r.name, r.id]));
+    expect(roleId.operator).toBeTruthy();
+    expect(roleId.support_agent).toBeTruthy();
+
+    const suffix = randomBytes(5).toString('hex');
+    const passwordHash = await hash(PASSWORD, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
+    const users: Record<string, string> = {};
+    for (const [roleName, email] of [
+      ['operator', `op-${suffix}@t.local`],
+      ['support_agent', `sa-${suffix}@t.local`],
+    ] as const) {
+      const userId = randomUUID();
+      await prisma.$executeRaw`
+        INSERT INTO users (id, email, email_normalized, password_hash, status, updated_at)
+        VALUES (${userId}::uuid, ${email}, ${email.toLowerCase()}, ${passwordHash}, 'active', now())`;
+      await prisma.$executeRaw`
+        INSERT INTO memberships (id, tenant_id, user_id, role_id, status)
+        VALUES (${randomUUID()}::uuid, ${tenantAId}::uuid, ${userId}::uuid, ${roleId[roleName]}::uuid, 'active')`;
+      users[roleName] = email;
+    }
+    const operatorToken = await loginAs(users.operator!);
+    const supportToken = await loginAs(users.support_agent!);
+
+    // ── CREATE: operator cria (tickets.create); viewer-like profile leria ──
+    const created = await api(operatorToken, 'POST', '/api/v1/tickets', {
+      title: 'impressora do rack parou',
+      description: 'sem resposta desde ontem; impacto médio',
+      priority: 'high',
+    });
+    expect(created.status).toBe(201);
+    const ticketId = created.body.id as string;
+    // ── TRANSITION: operator NÃO pode (403); support_agent pode ──
+    const opTransition = await api(operatorToken, 'POST', `/api/v1/tickets/${ticketId}/transition`, { status: 'in_progress' });
+    expect(opTransition.status).toBe(403);
+    expect(opTransition.body.error?.code).toBe('permission_denied');
+    const saTransition = await api(supportToken, 'POST', `/api/v1/tickets/${ticketId}/transition`, { status: 'in_progress' });
+    expect([200, 201]).toContain(saTransition.status);
+    expect(saTransition.body.status).toBe('in_progress');
+
+    // ── COMMENT: operator comenta (tickets.create cobre comentários); 2 perfis deixam rastro ──
+    const opComment = await api(operatorToken, 'POST', `/api/v1/tickets/${ticketId}/comments`, { body: 'aberto pelo operator' });
+    expect(opComment.status).toBe(201);
+    const saComment = await api(supportToken, 'POST', `/api/v1/tickets/${ticketId}/comments`, { body: 'assumido pelo suporte' });
+    expect(saComment.status).toBe(201);
+    const got = await api(supportToken, 'GET', `/api/v1/tickets/${ticketId}`);
+    expect(got.status).toBe(200);
+    const comments = got.body.comments as JsonRecord[];
+    // transitions inserem comentário de sistema "status → X"; assert nos comentários dos perfis, em ordem
+    const bodies = comments.map((c) => String(c.body));
+    expect(bodies).toContain('aberto pelo operator');
+    expect(bodies).toContain('assumido pelo suporte');
+    expect(bodies.indexOf('aberto pelo operator')).toBeLessThan(bodies.indexOf('assumido pelo suporte'));
+
+    // ── ASSIGN: operator NÃO pode (403); support_agent atribui ao operator ──
+    const opAssign = await api(operatorToken, 'POST', `/api/v1/tickets/${ticketId}/assign`, { assignee_id: userAId });
+    expect(opAssign.status).toBe(403);
+    const saAssign = await api(supportToken, 'POST', `/api/v1/tickets/${ticketId}/assign`, { assignee_id: userAId });
+    expect([200, 201]).toContain(saAssign.status);
+    expect(saAssign.body.assigneeId ?? saAssign.body.assignee_id).toBe(userAId);
+
+    // ── RESOLVE: operator 403; support_agent resolve → fecha o ciclo ──
+    const opResolve = await api(operatorToken, 'POST', `/api/v1/tickets/${ticketId}/transition`, { status: 'resolved', note: 'trocada da peça' });
+    expect(opResolve.status).toBe(403);
+    const saResolve = await api(supportToken, 'POST', `/api/v1/tickets/${ticketId}/transition`, { status: 'resolved', note: 'peça trocada' });
+    expect([200, 201]).toContain(saResolve.status);
+    expect(saResolve.body.resolvedAt ?? saResolve.body.resolved_at).toBeTruthy();
+  }, 60_000);
 });
 
 // ---------------------------------------------------------------------------

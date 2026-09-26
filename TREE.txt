@@ -35,7 +35,8 @@ apps/
     src/
       main.ts  app.module.ts  errors.ts  correlation.middleware.ts
       http-exception.filter.ts
-      middleware/  rate-limit.middleware.ts
+      middleware/  rate-limit.middleware.ts  rate-limit.stats.ts
+                   rate-limit.controller.ts
       realtime/  realtime.module.ts  realtime.controller.ts
                  realtime.broker.ts  realtime.publisher.ts
       support/  support.module.ts  tickets.controller.ts
@@ -51,6 +52,8 @@ apps/
       cross-tenant.test.ts  auth-flow.test.ts  rate-limit.test.ts  helpers.ts
       e2e/global-setup.ts  e2e/full-flow.e2e.test.ts  e2e/wamonitor.e2e.test.ts
       e2e/hardening.e2e.test.ts  e2e/hm05.e2e.test.ts
+    scripts/
+      load-rate-limit.mjs
   worker/
     src/  main.ts  rules.engine.ts  incident.service.ts
           outbox.dispatcher.ts  notifications.ts  identity-bridge.ts
@@ -58,6 +61,7 @@ apps/
     test/ rules.test.ts  dedup.test.ts  webhook-signature.test.ts
   collector-gateway/
     src/  main.ts  auth.ts
+    scripts/  load-gateway.mjs
   web/
     src/  app/layout.tsx  app/page.tsx  app/globals.css
           app/login/page.tsx
@@ -65,12 +69,13 @@ apps/
           app/(app)/dashboard/page.tsx
           app/(app)/incidents/page.tsx  app/(app)/incidents/[id]/page.tsx
           app/(app)/agents/page.tsx
+          app/(app)/tickets/page.tsx  app/(app)/tickets/[id]/page.tsx
           app/(app)/hosts/page.tsx  app/(app)/hosts/[id]/page.tsx
           components/states.tsx  components/MetricChartCard.tsx
           lib/api.ts  lib/status.ts  lib/permissions.tsx
-          lib/sse.ts  lib/use-realtime.ts
+          lib/sse.ts  lib/use-realtime.ts  lib/tickets.ts
     test/ status.test.ts  permission-rendering.test.tsx  incident-detail.test.tsx
-          sse.test.ts
+          sse.test.ts  tickets.test.tsx
 agent/
   go.mod  go.sum
   cmd/waagent/main.go

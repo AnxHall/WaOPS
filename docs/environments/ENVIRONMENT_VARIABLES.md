@@ -11,6 +11,17 @@ No real values belong in this document.
 - `COLLECTOR_BASE_URL`
 - `NODE_ENV`
 
+## Runtime ports
+
+- `PORT` — porta do api (default 3001; usar **4000** sob teste)
+- `COLLECTOR_PORT` — porta do collector-gateway (default 3002; usar **5000** sob teste)
+
+## Test suite targets
+
+- `E2E_API_URL` / `E2E_GATEWAY_URL` — alvo dos E2E (default 3001/3002; convenção de teste: 4000/5000)
+- `E2E_MAILPIT_URL` — Mailpit para asserção de email
+- `API` — alvo da suíte de carga do rate limiter (`apps/api/scripts/load-rate-limit.mjs`)
+
 ## Object Storage
 
 - `S3_ENDPOINT`

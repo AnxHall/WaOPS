@@ -9,13 +9,14 @@ import { SessionProvider, type Me } from '@/lib/permissions';
 const NAV = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/incidents', label: 'Incidents' },
+  { href: '/tickets', label: 'Tickets' },
   { href: '/agents', label: 'Agents' },
   { href: '/hosts', label: 'Hosts' },
 ];
 
-// Módulos comerciais (module registry) — locked sem entitlement (designer.md §7)
+// Módulos comerciais (module registry) — locked sem entitlement (designer.md §7).
+// WaSupport saiu da lista na HM05 (tickets foundation implementada).
 const MODULE_NAV = [
-  { label: 'WaSupport' },
   { label: 'Wantry' },
   { label: 'WaDatabase' },
   { label: 'WaBackup' },

@@ -146,6 +146,7 @@ jobs:
           TRIAL_DAYS: '3'
 
       - name: Start services
+        # Test port convention (docs/environments/LOCAL_DEVELOPMENT.md): 4000/5000.
         run: |
           pnpm --filter @waops/api run start &
           pnpm --filter @waops/worker run start &
@@ -160,6 +161,8 @@ jobs:
           SMTP_HOST: localhost
           SMTP_PORT: '1025'
           E2E_MAILPIT_URL: http://localhost:8025
+          PORT: '4000'
+          COLLECTOR_PORT: '5000'
 
       - name: E2E full flow
         run: pnpm --filter @waops/api run test:e2e
@@ -169,8 +172,8 @@ jobs:
           REDIS_URL: redis://localhost:6379
           JWT_SECRET: ci-secret-ci-secret-ci-secret-1234
           ENCRYPTION_MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          E2E_API_URL: http://localhost:3001
-          E2E_GATEWAY_URL: http://localhost:3002
+          E2E_API_URL: http://localhost:4000
+          E2E_GATEWAY_URL: http://localhost:5000
           E2E_MAILPIT_URL: http://localhost:8025
 
       - name: Migration drift check

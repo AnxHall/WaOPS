@@ -47,6 +47,7 @@ E2E adversarial: `apps/api/test/e2e/hm05.e2e.test.ts`; unit: `apps/api/test/rate
 | POST | `/api/v1/tickets/:id/comments` | Adicionar comentário | User JWT | `tickets.create` | JWT/TenantContext | — | `{body}` ≤5000 | `201 Comment` + audit | 400; 401; 403; 404 | — | Suporte | E2E HM05 |
 | POST | `/api/v1/tickets/:id/assign` | Atribuir/desatribuir responsável | User JWT | `tickets.assign` | JWT/TenantContext | — | `{assignee_id: uuid\|null}` | `201 Ticket` + audit | 400 assignee sem membership ativa; 401; 403; 404 | — | Suporte | E2E HM05 |
 | POST | `/api/v1/tickets/:id/transition` | Transição de estado (máquina: `open→in_progress→resolved→closed` + reopens; terminal = closed) | User JWT | `tickets.resolve` | JWT/TenantContext | — | `{status, note?}` | `201 Ticket` (resolvedAt set/clear) + comentário de status + audit + realtime `ticket.transitioned` | 400; **409** transição ilegal; 401; 403; 404 | — | Suporte | E2E HM05 |
+| GET | `/api/v1/rate-limits` | Métrica de rate limiting: 429/min por classe de rota (janela 60s, contadores Redis `rl:stats:429:*` escritos pelo middleware) | User JWT | `tenants.read` | JWT/TenantContext | — | — | `{window_seconds:60, classes:[{routeClass, windowStart, limited}]}` (auth/api/realtime) | 401; 403 | — | Dashboard (card 429/min) | validado ao vivo + E2E rate-limit |
 | GET | `/healthz` | Liveness | Public | — | — | — | — | `{status:"ok"}` | — | — | Ops/Compose | E2E, resiliência |
 | GET | `/readyz` | Readiness (postgres/redis) | Public | — | — | — | — | `{postgres:"ok\|unavailable", redis:"ok\|unavailable"}` | — | — | Ops/Compose | MISSÃO 02 §20/21 |
 
@@ -62,5 +63,6 @@ E2E adversarial: `apps/api/test/e2e/hm05.e2e.test.ts`; unit: `apps/api/test/rate
 ## Não implementado (registrado para não inventar)
 
 `GET /entitlements`, `GET /usage`. SSE realtime **implementado na HARD MISSION 05** (`/api/v1/realtime/stream`, ADR-010);
-WaSupport foundation (tickets CRUD + transitions) implementado — UI de tickets ainda não existe no web.
+WaSupport foundation (tickets CRUD + transitions) implementado — UI de tickets entregue no follow-up HM05 (dashboard).
+Métrica de rate limiting implementada no follow-up HM05 (`GET /api/v1/rate-limits` + card 429/min no dashboard).
 Gaps de read-model fechados na HARD MISSION 03: ver `READ_MODEL_GAPS.md` (resta GAP-RM-006).
