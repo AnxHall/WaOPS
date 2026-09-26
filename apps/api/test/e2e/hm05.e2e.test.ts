@@ -523,6 +523,26 @@ describe('HM05 — rate limiting (adversarial)', () => {
     expect(bOk.status).toBe(200);
   }, 60_000);
 
+  it('exposes the 15-minute 429 history per route class (Redis-backed)', async () => {
+    // Os 429s dos testes acima já incrementaram rl:stats:429:{auth,api}:*.
+    // Consulta como tenant B (bucket da classe api não exaurido pelo burst).
+    const res = await api(tokenB, 'GET', '/api/v1/rate-limits/history');
+    expect(res.status).toBe(200);
+    expect(res.body.points).toBe(15);
+    const classes = res.body.classes as { routeClass: string; limited: { windowStart: string; limited: number }[] }[];
+    expect(classes.map((c) => c.routeClass)).toEqual(['auth', 'api', 'realtime']);
+    for (const c of classes) {
+      expect(c.limited.length).toBe(15);
+      // ordem cronológica: último ponto é o bucket corrente
+      expect(new Date(c.limited[14]!.windowStart).getTime()).toBeGreaterThan(new Date(c.limited[0]!.windowStart).getTime());
+    }
+    // 429s gerados acima caem nos buckets recentes (margem de 3 minutos)
+    const recent = (series: { windowStart: string; limited: number }[]) => series.slice(-3).reduce((s, p) => s + p.limited, 0);
+    const byClass = Object.fromEntries(classes.map((c) => [c.routeClass, c.limited]));
+    expect(recent(byClass.auth!)).toBeGreaterThan(0); // hammer test
+    expect(recent(byClass.api!)).toBeGreaterThan(0); // burst test
+  }, 30_000);
+
   it('resets the auth buckets (direct Redis) so other E2E files are unaffected', async () => {
     // Refill by polling would self-defeat (each probe consumes a token);
     // clearing the buckets restores the full budget instantly and verifies

@@ -180,3 +180,82 @@ jobs:
         run: pnpm --filter @waops/db exec prisma migrate diff --from-url "postgresql://waops:waops@localhost:5432/waops?schema=public" --to-schema-datamodel packages/db/prisma/schema.prisma --exit-code
         env:
           DATABASE_URL: postgresql://waops:waops@localhost:5432/waops?schema=public
+
+  # HARD MISSION 05 follow-up — failure-mode doctrine do rate limiter contra
+  # Redis INDISPONÍVEL (sem serviço redis neste job, de propósito):
+  #   RATE_LIMIT_FAILURE_MODE=closed → 503 dependency_unavailable (negar)
+  #   default (sem flag)             → requisição segue o fluxo (fail-open)
+  # E2E de produção (fail-open com Redis sã) já cobre o caminho feliz;
+  # aqui a sonda valida o caminho degradado ponta a ponta contra a API viva.
+  rate-limit-failure-mode:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: waops
+          POSTGRES_PASSWORD: waops
+          POSTGRES_DB: waops
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U waops"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @waops/db exec prisma generate
+
+      - name: Apply migrations
+        run: pnpm --filter @waops/db exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://waops:waops@localhost:5432/waops?schema=public
+
+      - name: Start API (fail-closed, Redis unreachable)
+        run: |
+          pnpm --filter @waops/api run start &
+          sleep 8
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://waops:waops@localhost:5432/waops?schema=public
+          REDIS_URL: redis://localhost:6390 # porta morta — sem serviço redis
+          JWT_SECRET: ci-secret-ci-secret-ci-secret-1234
+          ENCRYPTION_MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          SMTP_HOST: localhost
+          SMTP_PORT: '1025'
+          PORT: '4000'
+          RATE_LIMIT_FAILURE_MODE: closed
+
+      - name: Probe fail-closed (503 dependency_unavailable)
+        run: node scripts/probe-rate-limit-closed.mjs
+        env:
+          API: http://localhost:4000
+
+      - name: Start API (default fail-open, Redis unreachable)
+        run: |
+          pnpm --filter @waops/api run start &
+          sleep 8
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://waops:waops@localhost:5432/waops?schema=public
+          REDIS_URL: redis://localhost:6390 # porta morta — sem serviço redis
+          JWT_SECRET: ci-secret-ci-secret-ci-secret-1234
+          ENCRYPTION_MASTER_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          SMTP_HOST: localhost
+          SMTP_PORT: '1025'
+          PORT: '4001'
+
+      - name: Probe fail-open (request flows through → 401)
+        run: node scripts/probe-rate-limit-closed.mjs --expect-open
+        env:
+          API: http://localhost:4001

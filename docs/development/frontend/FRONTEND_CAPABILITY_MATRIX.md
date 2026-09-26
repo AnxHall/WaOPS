@@ -4,7 +4,8 @@
 > Atualizações HM04: agentes no dashboard reais (GAP-RM-006 fechado).
 > Atualizações HM05: dashboard com **realtime SSE** (ADR-010) — client `lib/sse.ts` + hook `use-realtime.ts`;
 > HM05 follow-up: tela de Tickets (lista + detalhe + transições) com realtime;
-> card **429/min por classe de rota** no dashboard (fonte Redis, `tenants.read` gate, fail-soft).
+> card **429/min por classe de rota** no dashboard (fonte Redis, `tenants.read` gate, fail-soft)
+> com **sparkline de 15 min** (`RateLimitSparkline`, SVG puro, `GET /api/v1/rate-limits/history`).
 > Evidências: testes nomeados (`apps/web/test/*` incl. `sse.test.ts`), `API_ENDPOINT_MATRIX.md`,
 > Evidências: testes nomeados (`apps/web/test/*`), `API_ENDPOINT_MATRIX.md`,
 > `API_READ_MODELS.md`, `READ_MODEL_GAPS.md`. Coluna "API real": ✅ todos os dados

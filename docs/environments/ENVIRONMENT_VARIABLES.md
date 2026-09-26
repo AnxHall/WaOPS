@@ -20,7 +20,7 @@ No real values belong in this document.
 
 - `E2E_API_URL` / `E2E_GATEWAY_URL` — alvo dos E2E (default 3001/3002; convenção de teste: 4000/5000)
 - `E2E_MAILPIT_URL` — Mailpit para asserção de email
-- `API` — alvo da suíte de carga do rate limiter (`apps/api/scripts/load-rate-limit.mjs`)
+- `API` — alvo da suíte de carga do rate limiter (`apps/api/scripts/load-rate-limit.mjs`) e da sonda de failure-mode (`scripts/probe-rate-limit-closed.mjs`, job `rate-limit-failure-mode` no CI)
 
 ## Object Storage
 
@@ -29,6 +29,10 @@ No real values belong in this document.
 - `S3_BUCKET`
 - `S3_ACCESS_KEY_ID` — secret
 - `S3_SECRET_ACCESS_KEY` — secret
+
+## Rate limiting
+
+- `RATE_LIMIT_FAILURE_MODE` — `closed` endurece o limiter para negar (503 `dependency_unavailable`) quando o Redis está indisponível; default é fail-open. Validado no CI pelo job `rate-limit-failure-mode` (sonda `scripts/probe-rate-limit-closed.mjs`)
 
 ## Encryption
 
